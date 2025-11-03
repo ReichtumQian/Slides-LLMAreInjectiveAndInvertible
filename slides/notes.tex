@@ -90,20 +90,20 @@
 \section{Introduction \& Motivation}
 
 \begin{frame}{Background: LLM Representations}
-  \begin{itemize}
-    \item Large Language Models (LLMs) use Transformer architectures
-    \item Map discrete input sequences to continuous hidden representations
-    \item Key question: Are these representations \textbf{lossless}?
-  \end{itemize}
 
-  \vspace{1em}
-  \textbf{Common assumption:}
-  \begin{itemize}
-    \item Non-linear activations (GELU, softmax)
-    \item Layer normalization
-    \item Attention mechanisms
-    \item $\Rightarrow$ Different inputs \emph{could} collapse to same representation
-  \end{itemize}
+  LLMs use Transformer architectures and 
+  map input sequences to hidden representations.
+
+  \textbf{Key Question}: 
+  Are these representations \textbf{lossless}?
+  Does different inputs collapse to same representation?
+
+  \begin{figure}
+    \centering
+    \includegraphics[width=0.5\textwidth]{png/LLM-Noninjective.png}
+    % \caption{Illustration of the losslessness of representations.}
+  \end{figure}
+
 \end{frame}
 
 \begin{frame}{Research Question}
@@ -114,6 +114,7 @@
       \end{block}
 
       \vspace{0.5em}
+
       This paper challenges the conventional view by proving:
       \begin{enumerate}
         \item Transformer LMs are \textbf{injective} (almost surely)
@@ -122,8 +123,11 @@
       \end{enumerate}
 
       \vspace{0.5em}
+
       \small{\textbf{Implications:} Transparency, interpretability, safe deployment}
+
     \end{column}
+
     \begin{column}{0.48\textwidth}
       \begin{figure}
         \centering
@@ -132,6 +136,7 @@
       \end{figure}
     \end{column}
   \end{columns}
+
 \end{frame}
 
 % ============================================================
@@ -153,7 +158,7 @@
       \begin{itemize}
         \item Real-analytic functions have measure-zero collision sets
         \item Either identically zero or zero set has measure zero
-        \item Standard initializations avoid measure-zero sets w.p. 1
+        \item Standard initializations avoid measure-zero sets with probability 1
       \end{itemize}
     \end{column}
     \begin{column}{0.4\textwidth}
@@ -197,8 +202,12 @@
   \textbf{Key ideas:}
   \begin{itemize}
     \item GD update $\phi(\boldsymbol{\theta}) = \boldsymbol{\theta} - \eta \nabla \mathcal{L}(\boldsymbol{\theta})$ is real-analytic
-    \item Jacobian determinant $\det D\phi$ not identically zero
-    \item Inverse Function Theorem: preserves absolute continuity
+    \item A set $\mathcal{C}$ with measure zero,
+          its pre-image $\mathcal{C}_1 = \phi^{-1}(\mathcal{C})$ must also have measure zero. 
+    \begin{itemize}
+      \item Jacobian determinant $\det D\phi$ not identically zero
+      \item Inverse Function Theorem: preserves absolute continuity
+    \end{itemize}
     \item Finite composition of GD steps preserves measure properties
   \end{itemize}
 \end{frame}
@@ -222,6 +231,7 @@
       \item Guaranteed linear-time complexity: $O(T \cdot |\mathcal{V}|)$
       \item Often much faster in practice
     \end{itemize}
+    where $T$ is the length of the input sequence and $|\mathcal{V}|$ is the size of the vocabulary.
   \end{block}
 \end{frame}
 
@@ -261,6 +271,7 @@
       \RETURN $\widehat{\mathrm{s}}$
     \end{algorithmic}
   \end{algorithm}
+  Here $\ell$ is the layer index, $T$ is the sequence length, and $|\mathcal{V}|$ is the vocabulary size.
 \end{frame}
 
 \begin{frame}{Theoretical Guarantee}
@@ -447,25 +458,6 @@
       \item Security: hidden states leak complete information
     \end{itemize}
   \end{enumerate}
-\end{frame}
-
-\begin{frame}{Limitations \& Future Work}
-  \textbf{Known failure cases (by design):}
-  \begin{itemize}
-    \item Tied embeddings for different tokens
-    \item Quantization or non-smooth activations
-    \item Deliberately engineered collision parameters
-  \end{itemize}
-
-  \vspace{1em}
-  \textbf{Future directions:}
-  \begin{itemize}
-    \item Extend to encoder-decoder architectures
-    \item Study injectivity in multi-modal models
-    \item Applications in model interpretability
-    \item Privacy implications and defenses
-    \item Theoretical analysis of other architectures (State Space Models, etc.)
-  \end{itemize}
 \end{frame}
 
 \begin{frame}{Conclusion}
