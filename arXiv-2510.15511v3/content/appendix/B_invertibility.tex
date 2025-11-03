@@ -1,0 +1,504 @@
+%\newpage
+\section{Left-Invertibility Via SIP-It}\label{sec:left-invertibility}
+
+\textbf{Goal.} We study when and how the hidden states of a causal decoder-only Transformer admit a \emph{left inverse}: given the layer-$\ell$ representation at position $t$ and the true prefix $\pi=\mathrm{s}_{1:t-1}$, can we recover the next token $\mathrm{s}_t$?
+
+\textbf{Main idea.} Under mild randomness in the parameters and causal masking, the \emph{one-step last-token map} that sends a candidate token $v$ to the layer-$\ell$ representation at position $t$ (conditioning on $\pi$) is almost-surely injective, and in fact has a positive separation margin. This yields a simple verifier: declare $v$ correct iff the observed hidden state lies in a small ball around $F(v;\pi,t)$. 
+
+\textbf{Algorithmic consequence.} Because causality localizes the dependence to $(\pi,\mathrm{s}_t)$, we can invert an entire sequence sequentially with a single pass over the vocabulary per position. We call this procedure \textsc{\textsc{Sip-It}} (\underline{S}equential \underline{I}nversion via \underline{P}refixwise \underline{I}njective \underline{T}ests), and we show exact (and robust) recovery holds almost surely, with worst-case time $\Theta(T|\mathcal V|)$.
+
+\paragraph{Standing conventions for this section.}
+Fix a layer index $\ell\in[L]$. For any input sequence $\mathrm{s}=\langle \mathrm{s}_1,\ldots,\mathrm{s}_T\rangle$, define the layer outputs row-wise by
+\[
+\mathbf{H}^{(0)}(\mathrm{s}) := \mathrm{Emb}(\mathrm{s}),\qquad
+\mathbf{H}^{(\ell)}(\mathrm{s}) := \mathrm{TB}^{(\ell)}\!\big(\mathbf{H}^{(\ell-1)}(\mathrm{s})\big)
+\ \in \ \mathbb{R}^{T\times d},
+\]
+and write $\mathbf{h}_t(\mathrm{s})$ to denote the row of $\mathbf{H}^{(\ell)}(\mathrm{s})$ at position $t$. Furthermore, we use $\oplus$ for sequence concatenation: if $s=\langle \mathrm{s}_1,\ldots,\mathrm{s}_{t-1}\rangle$ and $v\in\mathcal{V}$, then $s\oplus v=\langle \mathrm{s}_1,\ldots,\mathrm{s}_{t-1}, v\rangle$.
+
+The parameters $\boldsymbol{\theta}$ and target layer $\ell$ are considered fixed and omitted for simplicity. 
+
+\begin{assumption}[Causal self-attention throughout]\label{ass:causal}
+Every attention layer in every block is \emph{causal} in the sense of Definitions \ref{def:self-attn-causal-masked}/\ref{def:self-attn-causal-proj}. Consequently, for any $\mathrm{s}$ and any $t\in[T]$,
+\begin{equation}\label{eq:causal-row-dependence}
+\mathbf{h}_t(\mathrm{s}) \; \text{depends only on the prefix} \; \langle \mathrm{s}_1,\ldots,\mathrm{s}_t\rangle .
+\end{equation}
+\end{assumption}
+
+\begin{assumption}[Injectivity Assumption]\label{ass:inj}
+    \textsc{Sip-It} is applied to models initialized with parameters drawn from an absolutely continuous distribution and trained via (mini-batch) gradient descent with step sizes in $(0,1)$, as described in Appendix~\ref{sec:app:asinj}. Under these conditions, any network considered in the sequel is almost-surely injective (\autoref{thm:main}).
+\end{assumption}
+
+
+\subsection{One-Step Last-Token Maps}
+
+We first isolate the positionwise map that drives inversion. Fix a position $t$ and prefix $\pi\in\mathcal V^{t-1}$. The \emph{one-step map} $F(\cdot;\pi,t)$ sends a candidate token $v$ to the layer-$\ell$ hidden state at position $t$ obtained when the prefix is $\pi$ and the token at $t$ is $v$. Causality implies that $\mathbf h_t$ depends only on $(\pi,v)$ (not on any future tokens), and we show that, for almost all parameter settings, $F$ is injective with a strictly positive pairwise margin over $\mathcal V$.
+
+% In this subsection, we introduce the key tool connecting invertibility and injectivity: the last-token map, along with its main properties.
+
+
+\begin{definition}[One-step map at time $t$ under prefix $\pi$]\label{def:onestep-map}
+Let $\pi\in\mathcal{V}^{t-1}$ be a fixed prefix (possibly $t=1$, when $\pi$ is empty). Define
+\[
+F:\ \mathcal{V}\longrightarrow \mathbb{R}^d,
+\qquad
+F(v \, ; \, \pi, t) \ :=\ \mathbf{h}_t(\mathrm{\pi} \oplus v) .
+\]
+\end{definition}
+
+\begin{remark}
+    $F$ is simply a function that returns the hidden output of token $v$ at the $\ell$ transformer block given that $\pi$ is used a fixed prefix. This map allows us to have a convenient notation for introducing results about inversion. Furthermore, since $F$ is built using $\ell$ transformer blocks, it is parameterized by $\boldsymbol\theta$. Nevertheless, for the sake of simplicity, we will refer to $F_{\ell, {\boldsymbol\theta}}$ simply as $F$.
+\end{remark}
+
+
+Once the One-step map (\autoref{def:onestep-map}) is introduced, one can present its a.s. injectivity through an application of the previously obtained result (\autoref{thm:main}). Furthermore, one can deploy the common prefix to introduce a stronger notion of injectivity: margin separation (\autoref{lem:onestep-margin}). 
+
+\begin{theorem}[A.s.\ one-step injectivity]\label{thm:onestep-injective}
+Fix $t$ and the prefix $\pi\in\mathcal{V}^{t-1}$. 
+Under Assumptions~\ref{ass:causal} and \ref{ass:inj}, it holds that:
+\[
+\Pr\big[ \; \exists v \neq v' \in \mathcal{V} :  F(v \, ; \, \pi, t) = F(v' \, ; \, \pi, t) \; \big]\ =\ 0.
+\]
+Equivalently, $F$ is injective almost-surely.
+\end{theorem}
+
+
+\begin{proof}
+Set the finite family
+$\mathcal{S}_{t,\pi}:=\{\pi\oplus v:\ v\in\mathcal{V}\}\subseteq \mathcal{V}^{t}$ and view $\mathbf{h}_t(\mathrm{s})$ as the last-token representation of the \emph{truncated} Transformer consisting of the first $\ell$ blocks. All assumptions used in \autoref{cor:global-distinct-h1} remain valid for this truncated model. Applying the corollary with $\mathcal{S}=\mathcal{S}_{t,\pi}$
+yields, almost-surely, $\mathbf{h}_t(\mathrm{\pi} \oplus v) \neq \mathbf{h}_t(\mathrm{\pi} \oplus v')$ whenever $v \neq v'$. This is exactly the injectivity of $F$. 
+\end{proof}
+
+
+\begin{lemma}[Strict separation margin a.s.]\label{lem:onestep-margin}
+Under the conditions of \autoref{thm:onestep-injective}, define the (data-dependent) margin
+\[
+\Delta_{\pi, t} \ :=\ \min_{v \neq v'\in\mathcal{V}} \big\|F(v \, ; \, \pi, t)-F(v' \, ; \, \pi, t)\big\|_2  
+\]
+
+Then,  
+\[
+\Pr[\Delta_{\pi, t}>0]=1.
+\]
+\end{lemma}
+
+\begin{proof}
+By \autoref{thm:onestep-injective}, with probability $1$ the set  
+\[
+\{F(v \, ; \, \pi, t) : v \in \mathcal{V}\}
+\]  
+consists of $|\mathcal{V}|$ distinct points in $\mathbb{R}^d$. On this event of full probability, every pairwise distance among these finitely many points is strictly positive, so their minimum is strictly positive as well.  
+
+Thus, the event $\{\Delta_{\pi, t} > 0\}$ coincides with the event that $F$ is injective on $\mathcal{V}$. Since injectivity holds almost-surely by assumption, we conclude that $\Pr[\Delta_{\pi, t} > 0] = 1$.
+\end{proof}
+
+
+
+\subsection{The Core Routines: Local Verifiers, Acceptance Regions, and Policies}
+
+Given $F(\cdot \, ; \, \pi,t)$, inversion reduces to a local hypothesis test: for an observed $\widehat{\mathbf h}_t$, which token’s predicted representation is closest? We formalize this with \emph{acceptance regions}--closed balls around $F(v \, ; \, \pi,t)$--and a \emph{verifier} that accepts $v$ iff $\widehat{\mathbf h}_t$ lies in its ball. Almost-sure injectivity yields uniqueness at radius $0$, and a positive margin yields uniqueness for any $\varepsilon<\Delta_{\pi,t}/2$. To explore candidates efficiently, we couple the verifier with any \emph{policy} that enumerates untried tokens (e.g., uniform without replacement or a gradient-guided ranking).
+
+% In this subsection, we introduce the main conceptual blocks required to build our inversion algorithm. In the coming subsection, we will use $\widehat{\mathbf{h}}_t$ to denote the $t$-th row of an observed matrix of hidden representations that we aim to invert to a sequence of tokens.
+
+\begin{definition}[Local \emph{verifier} and acceptance tolerance]\label{def:local-verifier}
+Given a tolerance $\varepsilon\ge 0$, define the acceptance region for symbol $v$ as the closed ball (\autoref{def:balls}):
+\[
+\mathcal{A}_{\pi,t}( v \, ; \,   \varepsilon)\ :=\ \overline{B}\big(F(v \, ; \, \pi, t), \varepsilon \big).
+\]
+A candidate token $v \in \mathcal{V}$ is \emph{verified} for observation $\widehat{\mathbf{h}}_t$ if and only if $\; \widehat{\mathbf{h}}_t\in\mathcal{A}_{\pi,t}( v \, ; \,   \varepsilon)$.
+\end{definition}
+
+\begin{remark}[Decoding via acceptance regions]\label{rem:verifier}
+    Given a prefix $\pi\in\mathcal{V}^{t-1}$ and the observation $\widehat{\mathbf{h}}_t$ at position $t$, we identify the next token by checking in which acceptance region $\widehat{\mathbf{h}}_t$ lies: declare $v$ \emph{verified} iff $\widehat{\mathbf{h}}_t\in\mathcal{A}_{\pi,t}(v;\varepsilon)$. 
+    By \autoref{lem:onestep-margin}, for any $\varepsilon<\sfrac{\Delta_{\pi, t}}{2}$ the regions $\{\mathcal{A}_{\pi,t}(v;\varepsilon)\}_{v\in\mathcal V}$ are pairwise disjoint; hence there is at most one verified token (and in the noiseless case $\varepsilon=0$, exactly one).
+\end{remark}
+
+
+
+Building on the intuition in \autoref{rem:verifier}, we introduce two radii to define acceptance regions that avoid collisions:
+
+\begin{proposition}[Probabilistic soundness and uniqueness of the local verifier]\label{prop:verifier-sound-prob}
+Fix position $t$ and prefix $\pi \in \mathcal{V}^{t-1}$. Under Assumptions~\ref{ass:causal} and \ref{ass:inj}, for all $v^\star \in \mathcal{V}$, the following hold with probability one:
+
+\vspace{-8px}
+\begin{enumerate}[itemsep=0em,leftmargin=2em]
+\item \textbf{Noiseless soundness.} If $\varepsilon=0$ and $\widehat{\mathbf h}_t=F(v^\star \, ; \, \pi,t)$, then $v^\star$ is the unique verified symbol.
+\item \textbf{Robust uniqueness.} If $\varepsilon<\sfrac{\Delta_{\pi, t}}{2}$ and $\widehat{\mathbf h}_t\in \mathcal{A}_{\pi, t}(v^* \, ; \, \varepsilon)$, then $v^\star$ is the unique verified symbol.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+Recall that under Assumptions~\ref{ass:causal} and \ref{ass:inj}, $F$ is injective and $\Delta_{\pi, t}>0$ almost-surely.
+
+\emph{(1) Noiseless soundness.}
+For any $v \in \mathcal{V}$, $\mathcal{A}_{\pi, t}(v \, ; \, 0)=\{F(v \, ; \, \pi, t)\}$.
+If $\widehat{\mathbf h}_t=F(v^\star \, ; \, \pi,t)$ and some $v\neq v^\star$ were also verified at $\varepsilon=0$, we would have
+$F(v \, ; \, \pi, t)=F(v^\star \, ; \, \pi,t)$, which is a probability zero event under the assumptions made. Hence $v^\star$ is uniquely verified almost-surely.
+
+\emph{(2) Robust uniqueness.}
+Assume $\varepsilon<\sfrac{\Delta_{\pi, t}}{2}$ and $\|\widehat{\mathbf h}_t-F(v^\star \, ; \, \pi,t)\|_2<\varepsilon$.
+If some $v\neq v^\star$ were also verified, then $\|\widehat{\mathbf h}_t-F(v \, ; \, \pi, t)\|_2\le\varepsilon$.
+By the triangle inequality,
+\[
+\big\|F(v \, ; \, \pi, t)-F(v^\star \, ; \, \pi,t)\big\|_2
+\ \le\
+\big\|\widehat{\mathbf h}_t-F(v \, ; \, \pi, t)\big\|_2
++
+\big\|\widehat{\mathbf h}_t-F(v^\star \, ; \, \pi,t)\big\|_2
+\ <\ 2\varepsilon\ <\ \Delta_{\pi, t},
+\]
+contradicting the definition of $\Delta_{\pi, t}$ (again, valid under the assumptions made). Thus $v^\star$ is uniquely verified almost-surely.
+\end{proof}
+
+
+
+
+% \begin{remark}[Trained models]
+% By \autoref{cor:finite-steps-ac}, absolute continuity of the parameter law is preserved under any finite number of gradient-descent steps. Therefore \autoref{thm:onestep-injective}, \autoref{lem:onestep-margin} and \autoref{prop:verifier-sound-prob} hold almost-surely both at initialization and after any finite training horizon.
+% \end{remark}
+
+Finally, we introduce the last conceptual block required to build the inversion algorithm:
+
+% \begin{definition}[Covering candidate policy]\label{def:policy}
+% For a prefix $\pi \in \mathcal{V}^{t-1}$, a \emph{covering candidate policy} is a total order (permutation) $\rho : \mathcal{V} \to \{1,\dots,|\mathcal{V}|\}$.
+% \end{definition}
+
+% \begin{remark}
+%     A total order of the vocabulary is simply an arrangement of all tokens in $\mathcal{V}$ where each token appears exactly once. A candidate ordering policy at $\pi$ specifies such an arrangement. By sequentially consuming tokens from this ordering without repetition, our inversion algorithm can systematically explore all candidates and achieve convergence in linear time.
+%     Henceforth, we call such type of search algorithm based on covering candidate policy as \textbf{policy algorithms}.
+% \end{remark}
+
+
+\begin{definition}[Policy algorithm]\label{def:policy}
+Let $\mathcal{V}$ be a finite vocabulary. A \emph{policy algorithm} is a (possibly randomized) map
+\[
+\Pi:\ \{\,\mathcal{C}\subsetneq\mathcal{V}\,\}\ \longrightarrow\ \mathcal{V}
+\qquad\text{such that}\qquad
+\Pi(\mathcal{C})\in \mathcal{V}\setminus \mathcal{C}\ \ \text{for all }\mathcal{C}\subsetneq\mathcal{V}.
+\]
+(When $\mathcal{C}=\mathcal{V}$ the map is undefined.) 
+\end{definition}
+
+\begin{remark}[Enumeration property]
+Intuitively, a policy chooses any token not tried yet. Starting from $\mathcal{C}_0=\varnothing$ and iterating
+\[
+v_i:=\Pi(\mathcal{C}_{i-1}),\qquad \mathcal{C}_i:=\mathcal{C}_{i-1}\cup\{v_i\}\quad (i=1,\dots,|\mathcal{V}|),
+\]
+produces a sequence $(v_1,\dots,v_{|\mathcal{V}|})$ that is a (possibly random) permutation of $\mathcal{V}$.
+Thus, in exactly $|\mathcal{V}|$ steps, every token is output once with no repetitions.
+\end{remark}
+
+
+\paragraph{Two examples of policy algorithms.}
+We give (i) a \emph{uniform-random without replacement} policy and (ii) a \emph{gradient-guided} policy.
+
+\begin{algorithm}[H]
+\caption{\textbf{Policy (Random)}}
+\label{alg:policy-random}
+\begin{algorithmic}[1]
+\Require Vocabulary $\mathcal{V}$; \; visited set $\mathcal{C}$; \; embedding matrix $\mathbf{E}\in\mathbb{R}^{|\mathcal{V}| \times d}$
+\Ensure Next token ID and embedding
+\State Sample a permutation $L = (v_1, \ldots, v_{|\mathcal{V}|})$ uniformly from $\mathcal{V}$
+\State Define $\rho(v \, ; \, \pi)$ as the rank of $v$ in $L$
+\State $v^\star = \arg\min_{v \in \mathcal{V} \setminus C}\ \rho(v \, ; \, \pi)$
+\State \Return $v^\star$, $\mathbf{E}_{v^\star}$
+\end{algorithmic}
+\end{algorithm}
+
+
+\begin{algorithm}[H]
+\caption{\textbf{Policy (Gradient-based)}}
+\label{alg:policy-gradient}
+\begin{algorithmic}[1]
+\Require Vocabulary $\mathcal{V}$; visited set $\mathcal{C}$; embedding matrix $\mathbf{E}\in\mathbb{R}^{|\mathcal{V}|\times d}$ ;\; prefix $\pi \in \mathcal{V}^{t-1}$; \; layer $\ell$; \; previous continuous embedding $\mathbf e^{(j-1)}$ ;\; step size $\gamma>0$;\; gradient-based update rule $\mathcal{G}$
+\Ensure Next token ID and embedding
+\State $\mathbf g \gets \nabla_{\mathbf{e}^{(j-1)}} \, \tfrac12 \left\| F\left( \mathbf{e}^{(j-1)} \, ; \, \pi, t \right)  - \widehat{\mathbf{h}}_t \right\|_2^2$
+\State $\mathbf e^{(j)} \gets \mathcal{G}(\mathbf e^{(j-1)},\mathbf g,\gamma)$
+\State Get $L=(v_1, \ldots, v_{|\mathcal{V}|})$ by ordering $v_i$ based on $\ell_2(\mathbf{E}_{v_i}, \mathbf{e}^{(j)})$
+
+\State Define $\rho(v \, ; \, \pi)$ as the rank of $v$ in $L$
+\State $v^\star = \arg\min_{v \in \mathcal{V} \setminus C}\ \rho(v \, ; \, \pi)$
+\State \Return $v^\star$, $\mathbf{e}^{(j)}$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{remark}[Bypassing the embedding layer]
+We slightly overload notation and write $F(\mathbf e;\pi,t)$. 
+Here we bypass the token embedding lookup and inject a continuous vector at the current position: 
+the first $t\!-\!1$ rows of $\mathbf H^{(0)}$ are set to $\mathrm{Emb}(\pi)$ and the $t$-th row is set to $\mathbf e$.
+This extension is used only to guide the search (e.g., in \textbf{Policy-Gradient}). 
+All theoretical guarantees are stated for $F(v;\pi,t)$ with $v\in\mathcal V$ and are unaffected by allowing $F$ to accept a continuous proxy during candidate scoring. 
+Any extra inputs/side outputs used by a policy (such as the updated proxy) are orthogonal to the correctness statements.
+\end{remark}
+
+\begin{remark}[Practical choice of policy]
+Both Alg.~\ref{alg:policy-random} and Alg.~\ref{alg:policy-gradient} satisfy \autoref{def:policy}.
+In practice we use the \textbf{gradient-guided} policy with standard gradient descent updates, 
+as it tends to find the verified token with far fewer proposals: the next token is chosen by ranking $\mathcal V$ by the distance 
+$\|\mathbf E_v-\mathbf e^{(j)}\|_2$ to the updated proxy $\mathbf e^{(j)}$.
+This preserves the same worst-case guarantees (single pass over $\mathcal V$) while improving empirical efficiency.
+\end{remark}
+
+
+% ---------- Cleaned-up conceptual block ----------
+
+% \paragraph{Ranking policies.}
+% At any step, the algorithm holds a state $s$ (e.g., a prefix $\pi \in \mathcal{V}^{t-1}$, a visited set $\mathcal{C}\subseteq\mathcal{V}$, and any auxiliary quantities).
+% We select the next candidate by ranking the unvisited tokens and taking the top one.
+
+% \begin{definition}[Ranking / permutation policy]\label{def:policy}
+% Let $\mathfrak{S}(\mathcal{V})$ denote the set of permutations of $\mathcal{V}$.
+% A \emph{policy} is a (possibly randomized) map
+% \[
+% \rho:\ \mathcal{S}\to \mathfrak{S}(\mathcal{V}),\qquad s\mapsto \rho_s,
+% \]
+% that assigns to each state $s$ a total order of $\mathcal{V}$.
+% Given a visited set $\mathcal{C}\subseteq\mathcal{V}$, the induced order on the remaining candidates
+% $\mathcal{U}(s):=\mathcal{V}\setminus\mathcal{C}$ is the restriction of $\rho_s$ to $\mathcal{U}(s)$.
+% \end{definition}
+
+% \begin{remark}[Score-based view]
+% Equivalently, a policy can be specified by a scoring function $S:\mathcal{S}\times \mathcal{V}\to\mathbb{R}$ and a fixed, global
+% tie-breaker $\prec_0$ on $\mathcal{V}$: define $v \prec_{\rho_s} v'$ iff
+% $S(s,v)<S(s,v')$, or $S(s,v)=S(s,v')$ and $v \prec_0 v'$.
+% This generates a total order $\rho_s$ without having to manipulate permutations explicitly.
+% \end{remark}
+
+% \paragraph{Two concrete policies.}
+% We provide to key policies: (i) a uniform-random policy and (ii) a gradient-guided policy.
+
+% \begin{algorithm}[H]
+% \caption{\textbf{Policy-Random} (uniform without replacement)}
+% \label{alg:policy-random}
+% \begin{algorithmic}[1]
+% \Require Vocabulary $\mathcal{V}$; visited set $\mathcal{C}$; (optional) RNG seed tied to the current prefix $\pi$
+% \Ensure Next token ID
+% \State Sample a permutation $L=(v_{(1)},\dots,v_{(|\mathcal{V}|)})$ of $\mathcal{V}$ uniformly at random (or equivalently, sample i.i.d.\ random keys for each $v$ and sort)
+% \State Let $\rho_s$ be the induced rank function from $L$
+% \State \Return $v^\star=\arg\min_{v\in \mathcal{V}\setminus\mathcal{C}} \rho_s(v)$
+% \end{algorithmic}
+% \end{algorithm}
+
+% \begin{algorithm}[H]
+% \caption{\textbf{Policy-Gradient} (score by proximity to a continuous proxy)}
+% \label{alg:policy-gradient}
+% \begin{algorithmic}[1]
+% \Require Vocabulary $\mathcal{V}$; visited set $\mathcal{C}$; embedding matrix $\mathbf{E}\in\mathbb{R}^{|\mathcal{V}|\times d}$; prefix $\pi\in\mathcal{V}^{t-1}$; previous proxy $\mathbf e^{(j-1)}$; step size $\gamma>0$; update rule $\mathcal{G}$
+% \Ensure Next token ID and updated proxy
+% \State $\mathbf g \gets \nabla_{\mathbf e^{(j-1)}} \,\tfrac12\Big\|F(\mathbf e^{(j-1)};\pi,t)-\widehat{\mathbf h}_t\Big\|_2^2$
+% \State $\mathbf e^{(j)} \gets \mathcal{G}\!\left(\mathbf e^{(j-1)},\mathbf g,\gamma\right)$
+% \State Define the score $S(s,v)=\|\mathbf{E}_v-\mathbf e^{(j)}\|_2$ and sort $\mathcal{V}$ ascending by $S$ with a fixed tie-breaker to obtain $\rho_s$
+% \State \Return $v^\star=\arg\min_{v\in \mathcal{V}\setminus\mathcal{C}} \rho_s(v)$, \ \ $\mathbf e^{(j)}$
+% \end{algorithmic}
+% \end{algorithm}
+
+% \begin{remark}[Bypassing the embedding layer]
+% We write $F(\mathbf e^{(j-1)};\pi,t)$ to indicate that we bypass the standard token embedding lookup and directly set
+% the input to the network as $\mathbf H^{(0)}(\pi)=\mathbf e^{(j-1)}$.
+% \end{remark}
+
+% \begin{remark}[Validity and complexity]
+% Both \textbf{Policy-Random} and \textbf{Policy-Gradient} produce a total order $\rho_s$ and thus satisfy \autoref{def:policy}.
+% Each step examines at most one new token, so across a stage the routine proposes at most $|\mathcal{V}|$ candidates (i.e., $O(|\mathcal{V}|)$ in the worst case).
+% In practice, the gradient-guided score $S(s,v)=\|\mathbf{E}_v-\mathbf e^{(j)}\|_2$ concentrates high-quality candidates early and finds the verified token in far fewer proposals.
+% \end{remark}
+
+
+\subsection{Global Inversion via \textsc{Sip-It}}\label{sec:sipit-global}
+
+We now compose the local verifier into a sequential decoder. At step $t$, causality ensures $\mathbf h_t(\mathrm{s})=F(\mathrm{s}_t;\pi,t)$ for the true prefix $\pi=\mathrm{s}_{1:t-1}$. Since the verifier uniquely accepts $\mathrm{s}_t$ (noiselessly, and robustly under perturbations below half the margin), any covering policy must encounter and accept the true token within a single pass over $\mathcal V$. Iterating from $t=1$ to $T$ yields exact recovery almost surely; we also quantify robustness and the worst-case runtime.
+
+We are now ready to introduce our inversion algorithm: \textsc{Sip-It} (Alg. \autoref{alg:sipit-main}). The algorithms applies to decoder-only transformers with \emph{causal} self-attention (\autoref{ass:causal}), and assumes injectivity, which occurs with almost-surely (\autoref{ass:inj}). We assume access to the layer-$\ell$ hidden states per position $\left\{ \widehat{\mathbf{h}}_t \right\}_{t=1}^T$ and to the parameters needed to evaluate the local verifier from \autoref{def:local-verifier} for arbitrary $(t,\pi,j)$, as well as the gradient (when needed), namely to the model up to layer $\ell$. A policy algorithm is fixed (e.g., Alg. \autoref{alg:policy-gradient}).
+
+We begin by recording the following standard lemma and omitting the proof, as it is immediate from causal masking: under causal self-attention, the representation at position $t$ is independent of future tokens. 
+\begin{lemma}[Causal factorization and prefixwise identifiability]\label{lem:causal-factorization}
+Under Assumptions~\ref{ass:causal} and \ref{ass:inj}, fix position $t\in[T]$. For any $\mathrm{s} = \langle \mathrm{s}_1, \ldots, \mathrm{s}_T \rangle$ with $\pi = \langle \mathrm{s}_1, \ldots, \mathrm{s}_{t-1} \rangle$,
+\[
+\mathbf{h}_t(\mathrm{s}) \;=\; F(\mathrm{s}_t \, ; \, \pi, t),
+\]
+where $F$ is the one-step map from \autoref{def:onestep-map}.
+% Therefore, if $\mathrm{s},\mathrm{s}'\in\mathcal{V}^T$ share the same prefix of length $t-1$ (i.e., $\mathrm{s}_{1:t-1}=\mathrm{s}'_{1:t-1}=\pi$), then:
+% \[
+% \mathbf{h}_t(\mathrm{s})=\mathbf{h}_t(\mathrm{s}')
+% \]
+\end{lemma}
+
+
+\begin{proof}
+With causal masking, position $t$ attends only to positions $\le t$.
+Evaluating the network up to layer $\ell$ therefore yields a representation at $t$ that is a function of the prefix $\pi$ and the current token $\mathrm{s}_t$ only, i.e. $F(\mathrm{s}_t \, ; \, \pi,t)$, as claimed.
+\end{proof}
+
+\begin{proposition}[The verifier is the right primitive]\label{prop:verifier-right-primitive}
+Fix $t$ and a true prefix $\pi=\langle \mathrm{s}_1, \ldots, \mathrm{s}_{t-1} \rangle$. Under \autoref{ass:causal}, the observed hidden state at step $t$ satisfies
+$\mathbf{h}_t(\mathrm{s}) = F(\mathrm{s}_t \, ; \, \pi,t)$ (\autoref{lem:causal-factorization}).
+In addition, under \autoref{ass:inj}, $F$ is injective and has positive margin $\Delta_{\pi, t}>0$ almost-surely (\autoref{thm:onestep-injective} and \autoref{lem:onestep-margin}).
+Consequently, for the local verifier of \autoref{def:local-verifier}, the following hold with probability one:
+
+\vspace{-8px}
+\begin{enumerate}[leftmargin=2em,itemsep=0em]
+\item (\emph{Noiseless}) With $\varepsilon=0$ and observation $\widehat{\mathbf h}_t=\mathbf{h}_t(\mathrm{s})$, the unique verified token is $\mathrm{s}_t$.
+\item (\emph{Robust}) If $\widehat{\mathbf h}_t=\mathbf{h}_t(\mathrm{s})+\mathbf e_t$ with
+$\|\mathbf e_t\|_2<\varepsilon<\sfrac{\Delta_{\pi, t}}{2}$, then $\mathrm{s}_t$ is the unique verified token.
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+Immediate from \autoref{lem:causal-factorization} and \autoref{prop:verifier-sound-prob} applied with $v^\star=\mathrm{s}_t$, which holds almost-surely by \autoref{thm:onestep-injective} and \autoref{lem:onestep-margin}.
+\end{proof}
+
+\begin{proposition}[Eventual acceptance under increasing enumeration]\label{prop:sipit-single-pass}
+Fix a position $t$ and the true prefix $\pi=\langle \mathrm{s}_1,\ldots,\mathrm{s}_{t-1}\rangle$. Under \autoref{ass:causal} and \autoref{ass:inj}, 
+let $\varepsilon\ge 0$ and work on the probability-one event where the local verifier uniquely accepts the true token $\mathrm{s}_t$
+(e.g., $\varepsilon=0$ or $\varepsilon<\Delta_{\pi,t}/2$; see \autoref{prop:verifier-right-primitive}). 
+
+Let $\Pi$ be any policy algorithm (\autoref{def:policy}). Define the increasing visited sets by
+$\mathcal C_0=\varnothing$, $v_i:=\Pi(\mathcal C_{i-1})$, and $\mathcal C_i:=\mathcal C_{i-1}\cup\{v_i\}$ for $i\ge1$, 
+and stop at the first index
+\[
+\tau:=\min\big\{\,i\ge1:\ \widehat{\mathbf h}_t\in \mathcal A_{\pi,t}(v_i \, ; \, \varepsilon)\,\big\}.
+\]
+Then $(v_i)_{i\ge1}$ enumerates $\mathcal V$ without replacement and $\tau\le|\mathcal V|$ almost surely. 
+In particular, for the fixed prefix $\pi$, the policy’s increasingly expanding search over $\mathcal V$ eventually proposes the unique verified token $\mathrm{s}_t$ and accepts it with probability~$1$.
+\end{proposition}
+
+\begin{proof}
+Work on the probability-one event of \autoref{prop:verifier-right-primitive} (under \autoref{ass:causal} and \autoref{ass:inj} with the stated $\varepsilon$), on which the local verifier at step $t$ uniquely accepts the true token $\mathrm{s}_t$. Equivalently,
+\begin{equation}\label{eq:uniq-accept}
+\widehat{\mathbf h}_t \in \mathcal A_{\pi,t}(v \, ; \,\varepsilon) \ \Longleftrightarrow\ v= \mathrm{s}_t .
+\end{equation}
+
+\paragraph{Enumeration without replacement.}
+By the definition of a policy algorithm (\autoref{def:policy}), $v_i=\Pi(\mathcal C_{i-1}) \in \mathcal V\setminus \mathcal C_{i-1}$ and $\mathcal C_i=\mathcal C_{i-1}\cup\{v_i\}$. Hence $v_i\notin \mathcal C_{i-1}$ and $|\mathcal C_i|=|\mathcal C_{i-1}|+1$. Inducting on $i$ yields that $(v_i)_{i\ge1}$ has no repetitions and $\mathcal C_i$ contains exactly $i$ distinct tokens. Since $\mathcal V$ is finite, after $|\mathcal V|$ steps we have $\mathcal C_{|\mathcal V|}=\mathcal V$, i.e., $(v_i)_{i=1}^{|\mathcal V|}$ is a permutation of $\mathcal V$ (this holds pathwise, for any realization of the policy's internal randomness).
+
+\paragraph{Eventual acceptance.}
+Because $(v_i)$ is a permutation of $\mathcal V$, there exists a unique index $j\in\{1,\dots,|\mathcal V|\}$ with $v_j = \mathrm{s}_t$. By \eqref{eq:uniq-accept},
+\[
+\tau=\min\{\,i\ge1:\ \widehat{\mathbf h}_t\in \mathcal A_{\pi,t}(v_i \, ; \, \varepsilon)\,\}
+=\min\{\,i\ge1:\ v_i=\mathrm{s}_t\,\}=j,
+\]
+so $\tau\le |\mathcal V|$ and the process accepts $\mathrm{s}_t$.
+
+Since the event on which \eqref{eq:uniq-accept} holds has probability $1$, the conclusion (eventual acceptance at finite $\tau$) holds almost surely.
+\end{proof}
+
+
+\begin{theorem}[Correctness of \textsc{\textsc{Sip-It}} (noiseless \& robust)]\label{thm:sipit-unified}
+For each $t\in\{1,\ldots,T\}$ let $\pi_t=\langle \mathrm{s}_1,\ldots,\mathrm{s}_{t-1}\rangle$ and let $\Delta_{\pi_t,t}>0$ be the margin of the one-step map $F(\cdot;\pi_t,t)$ from \autoref{lem:onestep-margin}. 
+Under Assumptions~\ref{ass:causal} and \ref{ass:inj}, run \textsc{\textsc{Sip-It}} (Alg.~\ref{alg:sipit-main}) with a tolerance $\varepsilon\ge 0$ and observations
+\[
+\widehat{\mathbf h}_t=\mathbf h_t(\mathrm{s})+\mathbf e_t\qquad (t=1,\ldots,T),
+\]
+where the perturbations satisfy $\|\mathbf e_t\|_2\le \varepsilon$ for all $t$ and
+\[
+\varepsilon \;<\; \tfrac12\,\Delta_{\pi_t,t}\qquad\text{for all }t.
+\]
+Then, with probability $1$ over the model parameters:
+(i) for every $t$, the \emph{inner for-loop over $j$} (the loop over vocabulary candidates) terminates within $|\mathcal V|$ iterations by accepting the true token $\mathrm{s}_t$; and
+(ii) after the \emph{outer for-loop over $t$} (the loop over positions) finishes, the algorithm outputs the exact sequence $\widehat{\mathrm{s}}=\mathrm{s}$.
+
+In particular, this covers the noiseless case by taking $\varepsilon=0$ and $\widehat{\mathbf h}_t=\mathbf h_t(\mathrm{s})$, and the robust case with any uniform $\varepsilon$ such that $\max_t\|\mathbf e_t\|_2\le \varepsilon<\tfrac12\min_t \Delta_{\pi_t,t}$.
+\end{theorem}
+
+\begin{proof}
+By \autoref{ass:inj}, \autoref{thm:onestep-injective}, and \autoref{lem:onestep-margin}, there is a probability-one event on which, for all $t$, $F(\cdot;\pi_t,t)$ is injective with strictly positive margin $\Delta_{\pi_t,t}$. Intersecting across finitely many $t$ preserves probability~1. Work on this event.
+
+By \autoref{ass:causal} and \autoref{lem:causal-factorization},
+$\mathbf h_t(\mathrm{s})=F(\mathrm{s}_t;\pi_t,t)$. Since $\|\mathbf e_t\|_2\le\varepsilon$,
+\[
+\widehat{\mathbf h}_t
+=F(\mathrm{s}_t;\pi_t,t)+\mathbf e_t
+\in \overline B\!\big(F(\mathrm{s}_t;\pi_t,t),\varepsilon\big)
+=\mathcal A_{\pi_t,t}(\mathrm{s}_t;\varepsilon),
+\]
+so the local verifier \emph{accepts} $\mathrm{s}_t$. Moreover, because $\varepsilon<\tfrac12\Delta_{\pi_t,t}$, \autoref{prop:verifier-sound-prob}(2) implies \emph{robust uniqueness}:
+\begin{equation}\label{eq:unique-accept-unified}
+\widehat{\mathbf h}_t\in\mathcal A_{\pi_t,t}(v;\varepsilon)\quad\Longleftrightarrow\quad v=\mathrm{s}_t .
+\end{equation}
+When $\varepsilon=0$, \eqref{eq:unique-accept-unified} also holds by \autoref{prop:verifier-sound-prob}(1). We now analyze \textsc{\textsc{Sip-It}} and proceed by induction on $t$.
+
+\emph{Base case ($t=1$).} The \emph{outer for-loop over $t$} begins with $\widehat{\mathrm{s}}=\langle\,\rangle=\pi_1$. 
+Inside the \emph{inner for-loop over $j$} (the loop over vocabulary candidates), the policy (\autoref{def:policy}) enumerates $\mathcal V$ without replacement. By \autoref{prop:sipit-single-pass}, there exists $j^\star\le |\mathcal V|$ such that $v_{j^\star}=\mathrm{s}_1$, which is accepted and triggers the \textbf{break}; the algorithm appends $\mathrm{s}_1$.
+
+\emph{Inductive step.} Suppose after completing the inner loop at step $t-1$ the algorithm has appended $\mathrm{s}_{t-1}$, so the prefix entering step $t$ is $\widehat{\mathrm{s}}=\pi_t$. By \eqref{eq:unique-accept-unified}, within the inner loop the verifier accepts exactly when $v_j=\mathrm{s}_t$. Because the policy enumerates $\mathcal V$ without replacement, some $j\le|\mathcal V|$ satisfies $v_j=\mathrm{s}_t$, which is accepted, appended, and the inner loop \textbf{break}s.
+
+Thus for every $t$, the inner loop terminates by accepting $\mathrm{s}_t$ within $|\mathcal V|$ iterations, and after the outer loop finishes we have appended $(\mathrm{s}_1,\ldots,\mathrm{s}_T)$, i.e., $\widehat{\mathrm{s}}=\mathrm{s}$.
+Since the reasoning holds on a probability-one event (independent of the policy’s internal randomness), the conclusion is almost sure.
+\end{proof}
+
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/all_gpt2_layer_boxplots.pdf}
+    \caption{Seeking collisions in a large-scale prompt set (\S\ref{sec:inj_res}). For each layer, boxplots show the distribution (log scale) of the \emph{minimum pairwise} $\ell_2$ distances between last-token states across prompts for the \texttt{GPT-2} model family (\texttt{Small}, \texttt{Medium}, and \texttt{Large}); red bars mark medians and the dashed line indicates the collision threshold $10^{-6}$.}
+    \label{fig:gpt-full-layer}
+\end{figure}
+
+\begin{proposition}[Termination and linear step bound]\label{prop:sipit-termination}
+Run \textsc{\textsc{Sip-It}} (Alg.~\ref{alg:sipit-main}) on a length-$T$ sequence with any policy that enumerates $\mathcal V$ without replacement.
+Then the algorithm halts after a finite number of iterations. Moreover, in the worst case the
+\emph{inner for-loop over $j$} executes at most $|\mathcal V|$ iterations at each position $t$, so the total number of verifier tests across the entire run is at most $T\,|\mathcal V|$. In particular, the number of loop iterations grows linearly with $T\cdot|\mathcal V|$.
+\end{proposition}
+
+\begin{proof}
+Fix a position $t$. The \emph{inner for-loop over $j$} proposes unvisited tokens and stops when a candidate verifies, or after exhausting $\mathcal V$. Because the policy enumerates without replacement, the loop can execute at most $|\mathcal V|$ iterations at step $t$. The \emph{outer for-loop over $t$} runs for exactly $T$ positions, hence the total number of inner-loop iterations (i.e., verifier tests) is at most $\sum_{t=1}^T |\mathcal V| = T|\mathcal V|<\infty$. Therefore the algorithm halts and the total number of tests is linear in $T\cdot|\mathcal V|$.
+\end{proof}
+
+
+\begin{remark}[Iterations vs.\ wall–clock time]
+\autoref{prop:sipit-termination} bounds the \emph{number of iterations/tests}: the inner loop performs at most $|\mathcal V|$ verifier tests per position, so the total is $\Theta(T|\mathcal V|)$. This is an \emph{iteration complexity} statement that holds for any policy satisfying the “enumerate $\mathcal V$ without replacement” property. Actual \emph{wall–clock time} also depends on the per–test cost (one call to $F(v;\pi,t)$ plus a distance) and on any policy overhead (e.g., forward/backward proxy updates, scoring, sorting). A generic decomposition is
+\[
+\text{time} \;=\; \Theta\!\big(T|\mathcal V|\cdot C_{\text{test}}\big)\;+\;\sum_{t=1}^{T} C_{\text{policy}}(t),
+\]
+where $C_{\text{test}}$ is the cost of one membership test and $C_{\text{policy}}(t)$ captures policy-specific work at step $t$. Thus, if $|\mathcal V|$ is treated as fixed and $C_{\text{test}},\,C_{\text{policy}}(t)$ are bounded (e.g., a constant number of proxy updates and at most one ranking per update), wall–clock time is $O(T)$. If $|\mathcal V|$ grows or the policy sorts per update, additional factors like $|\mathcal V|$ or $\log|\mathcal V|$ may appear in the time, but the termination and the $\Theta(T|\mathcal V|)$ \emph{iteration} bound remain unchanged.
+\end{remark}
+
+
+\begin{remark}[Choosing the tolerance $\varepsilon$]
+Theory guarantees uniqueness whenever $\varepsilon<\tfrac12\Delta_{\pi,t}$ (\autoref{prop:verifier-sound-prob}). 
+Since $\Delta_{\pi,t}$ is unknown, two practical choices work well: 
+(i) \emph{backoff}: start with a small $\varepsilon$ and increase only if no token verifies; 
+(ii) \emph{calibration}: set $\varepsilon$ from held-out hidden states at layer $\ell$.
+In all cases the decision rule remains a simple yes/no membership test.
+\end{remark}
+
+\begin{remark}[Why \textsc{\textsc{Sip-It}} is sequential]
+The algorithm never solves a global assignment. 
+At position $t$ it conditions on the current prefix $\pi$ and queries the local verifier for a single token. 
+Causality (\autoref{ass:causal}) ensures $\mathbf h_t$ depends only on $(\pi, \mathrm{s}_t)$, so these local, prefixwise decisions compose to recover the full sequence.
+\end{remark}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

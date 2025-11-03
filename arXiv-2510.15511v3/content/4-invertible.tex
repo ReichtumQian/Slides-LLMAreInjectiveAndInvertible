@@ -1,0 +1,115 @@
+\section{Exact prompt recovery via \textsc{SipIt}}
+\label{sec:inv}
+
+In the previous section, we have proven that decoder-only Transformers are almost surely injective, i.e., different prompts map to different hidden states. 
+We now show how this property can be used in practice to \textbf{reconstruct the exact input prompt} given hidden states at some layer. We call this algorithm \textsc{SipIt} (Sequential Inverse Prompt via ITerative updates). 
+
+Formally, recall from \S\ref{sec:inj} that the mapping from a prompt $\mathrm{s}$ to its last-token state is almost surely injective. Since the last state is itself a deterministic function of the hidden matrix at any layer~$\ell$, injectivity extends to the full representation 
+%
+\begin{align}
+    \mathrm{s}\mapsto \mathbf{H}^{(\ell)}(\mathrm{s})  \in\mathbb R^{T\times d} \,.
+\end{align}
+%
+We denote by $\mathbf{h}_t(\mathrm{s})$ the row of $\mathbf{H}^{(\ell)}(\mathrm{s})$ at position $t$. In the following, the parameters $\boldsymbol{\theta}$ and target layer $\ell$ are considered fixed and omitted for simplicity.
+
+%{\color{red} maybe we should shortly but explicitly argue that for \textbf{causal LLMs}, our theory result means that for two different prompts, the entire hidden state matrix will be different row-wise when the prefixes do not match. This is because we can view any intermidiate row as a last-token embedding of the prefix and therefore we have the gurantee that if the prefixes of the two prompts are not the same, then the rows will be different.}
+
+%We now show a stronger, constructive claim: given observed hidden states $\widehat{\mathbf{H}}^{(\ell)}(s)$ of an \emph{unknown} prompt $s$ at some layer $\ell$, one can \textbf{reconstruct the exact input sequence $s$}. We call this procedure \textsc{SipIt} (\textbf{S}equential \textbf{I}nverse \textbf{P}rompt via \textbf{IT}erative updates). 
+
+%Section \ref{sec:inj} established the \emph{almost-sure injectivity} of the map \(s\mapsto \mathbf r_s(\bm{\theta})\) from a prompt to its last-token state. Since the last token is a deterministic function of the full hidden matrix \(\mathbf{H}^{(\ell)}_s\in\mathbb R^{T\times d}\) at any fixed layer \(\ell\), injectivity lifts to \(s\mapsto \mathbf{H}^{(\ell)}_s\).
+
+%We now strengthen this to a \emph{constructive} statement: from the full hidden states' matrix one can \textbf{recover the exact input sequence}. The key observation is causal masking: the state at time \(t\) depends only on the prefix \(\langle s_1,\dots,s_{t-1}\rangle\) and the current token \(s_t\).
+
+The algorithm exploits the causal structure of Transformers: the hidden state at position $t$ depends only on the prefix $\langle \mathrm{s}_1,\dots, \mathrm{s}_{t-1} \rangle$ and the current token $\mathrm{s}_t$. This means that if we already know the prefix, then the hidden state at position $t$ uniquely identifies $\mathrm{s}_t$. 
+
+\textbf{Example.} Suppose the vocabulary is ${a,b,c}$ and the true prompt is $\langle a,b \rangle$. At $t=1$, the hidden state depends only on $\mathrm{s}_1$. By comparing the observed state with the three candidate states produced by trying $a$, $b$, and $c$, we can tell exactly which one matches, thus recovering $\mathrm{s}_1=a$. Then at $t=2$, we know the prefix $\langle a \rangle$, so we try appending each candidate token and again match the resulting hidden state to recover $\mathrm{s}_2=b$. Iterating this procedure reconstructs the full sequence.
+
+More generally, we can look at the ``one-step'' map
+%
+\begin{align}
+v_j \mapsto \mathbf{h}_t (\pi \oplus v_j)\,, \quad v_j\in\mathcal{V}\,,
+\end{align}
+%
+which gives the hidden state at step $t$ for each possible next token, given the fixed prefix $\pi=\langle \mathrm{s}_1, \dots, \mathrm{s}_{t-1} \rangle$ (here $\oplus$ denotes concatenation).
+
+%\begin{definition}[One-Step Map]
+%For a fixed layer $\ell$, time step $t$, and prefix $\pi = \langle s_1, \ldots, s_{t-1} \rangle$, the {one-step map} $F: \mathcal{V} \to \mathbb{R}^d$ is defined as the function that maps a candidate token $v \in \mathcal{V}$ to the resulting hidden state at position $t$:
+%$$F(v \, ; \, \pi,t,\ell):= \left[ \mathbf{H}^{(\ell)}({\pi \oplus v}) \right]_t .$$
+%Here, $\pi \oplus v$ denotes the concatenation of the prefix $\pi$ with the token $v$.
+%\end{definition}
+
+%The one-step map captures all possible outputs at step $t$ given a known history. If we can invert this map, we can recover $s_t$ from $\left[ \mathbf{H}^{(\ell)}(\mathrm{s})  \right]_t$ and the prefix $\pi=\langle s_1,\ldots,s_{t-1}\rangle$. By iterating this process, we can reconstruct the entire sequence. The feasibility of this approach rests on whether the one-step map is injective.
+
+\textbf{Remark.} By the analytic arguments of \S\ref{sec:inj}, the one-step map is almost surely injective: with a fixed prefix, any two distinct tokens almost surely yield distinct hidden states.
+
+This property makes sequence recovery straightforward. At each step $t$, given the hidden state $\widehat{\mathbf{h}}_t$ and the already recovered prefix, we simply check which candidate token produces a matching hidden state. That token must be the true $\mathrm{s}_t$. Repeating this process recovers the entire sequence.
+
+This leads to the \textsc{SipIt} algorithm, shown in Algorithm~\ref{alg:sipit-main}. At every position, the algorithm cycles through vocabulary candidates (according to some policy such as random order or gradient-guided search) until it finds the unique match\footnote{In practice, we accept matches if the observed hidden state is within an $\varepsilon$-ball around the predicted one.}, then appends it to the reconstructed prefix and moves on.
+
+%\begin{remark}[Almost-sure local injectivity]\label{rem:localinj}
+%The injectivity statement from Section \ref{sec:inj} carries over to the one-step map. In particular, if $v$ and $v'$ are two distinct tokens, then
+%\[
+%\Pr\big[ F(v \, ; \, \pi,t,\ell)=F(v' \, ; \, \pi,t,\ell)\big]=0\,.
+%\]
+%This follows directly from real-analyticity (\autoref{th:main:realan}) together with the one-step analysis in \autoref{sec:left-invertibility} (\autoref{thm:onestep-injective}) applied to the network truncated at layer~$\ell$. Intuitively, once the prefix is fixed, different candidate tokens produce different hidden states almost surely.
+%\end{remark}
+
+%Deploying the injectivity of this map, at each position $t$, given an observed hidden state $\widehat{\mathbf{h}}_t$ and the previously recovered prefix $\pi$, we can identify the true token $s_t$ by finding which candidate token $v \in \mathcal{V}$ produces a hidden state matching our observation. 
+
+%This is formalized by a \emph{local verifier}: a candidate $v$ is \emph{verified} if its output $F(v \, ; \, \pi,t,\ell)$ is sufficiently close to $\widehat{\mathbf{h}}_t$ \footnote{Geometrically, we define the acceptance region $\mathcal{A}_{\pi,t}(v \, ; \,\varepsilon)$, the ball of radius $\varepsilon$ around $F(v \, ; \, \pi,t,\ell)$, and verify $v$ when $\widehat{\mathbf{h}}_t\in\mathcal{A}_{\pi,t}(v \, ; \,\varepsilon)$.}. Furthermore, we can go through all the possible tokens without repetition via a policy algorithm, namely a map that returns the next untried token; see Algorithms \ref{alg:policy-random} and \ref{alg:policy-gradient} in Appendix \ref{sec:left-invertibility} for examples. This leads to the \textsc{SipIt} algorithm (Algorithm \ref{alg:sipit-main}), detailed below:
+%
+\begin{algorithm}[H]
+\caption{\textsc{Sip-It}: Sequential Inverse Prompt via Iterative Updates}
+\label{alg:sipit-main}
+\begin{algorithmic}[1]
+\Require Observed layer-$\ell$ states ${\widehat{\mathbf{H}}^{(\ell)}\in \mathbb{R}^{T\times d}}$; vocabulary $\mathcal{V}$; tolerance $\varepsilon\ge 0$.
+\Ensure Recovered sequence $\widehat{\mathrm{s}}=\langle \hat{\mathrm{s}}_1,\ldots,\hat{\mathrm{s}}_T\rangle$.
+\State $\widehat{\mathrm{s}}\gets \langle\,\rangle$
+\For{$t=1$ \textbf{to} $T$}
+  
+  \State $\mathcal{C}\gets \emptyset$ \Comment{tested candidates}
+  
+  %\State $\mathbf{e}^{(0)} \gets \mathbf{0}_d$
+  
+  \For{$j = 1$ \textbf{to} $|\mathcal{V}|$}
+     
+     %\State $v_j, \mathbf{e}^{(j)} \gets \textsc{Policy-Gradient}\left(\mathcal{V}, \mathcal{C}, \mathbf{E}, \widehat{s}, \ell, \mathbf{e}^{(j-1)}, \gamma, \mathrm{GD}\right)$
+     
+     \State $v_j \gets \textsc{Policy}\left(\mathcal{V}, \mathcal{C}, \widehat{\mathrm{s}}, \ell\right)$ \Comment{new candidate token $v_j$ (see Alg. \ref{alg:policy-random} and \ref{alg:policy-gradient})}
+     
+     \If{$\widehat{\mathbf{h}}_t \in \mathcal{A}_{\pi,t}( v_j \, ; \, \varepsilon)$} \Comment{verify $v_j$ (see Def. \ref{def:local-verifier})}
+     
+        \State $\widehat{\mathrm{s}}\gets \widehat{\mathrm{s}}\oplus v_j$ \Comment{hit!}
+        
+        \State \textbf{break}
+     
+     \Else
+        \State $\mathcal{C}\gets \mathcal{C}\cup \left\{ v_j \right\}$
+     \EndIf
+  \EndFor
+\EndFor
+\State \Return $\widehat{\mathrm{s}}$
+\end{algorithmic}
+\end{algorithm}
+
+To rule out edge cases and analyze the computational cost of \textsc{SipIt}, we now state a formal guarantee.
+
+\begin{theorem}[Correctness of \textsc{SipIt}]\label{th:main:sipit_correct}
+Under the assumptions of Theorem \ref{thm:gdinjec}, given observed hidden states $\widehat{\mathbf{H}}^{(\ell)}$, \textsc{SipIt} recovers the true input sequence $\mathrm{s}$ with probability one in at most $T|\mathcal{V}|$ steps.
+%
+%let $\{\widehat{\mathbf{h}}_t\}_{t=1}^T$ be the observed layer-$\ell$ hidden states. Then, if the observations are exact, namely $\widehat{\mathbf{h}}_t =\left[ \mathbf{H}^{(\ell)}(\mathrm{s})  \right]_t$, \textsc{SipIt} returns the true sequence $\mathrm{s}$ with probability one in $\Theta\!\big(T\,|\mathcal V|\big)$.
+\end{theorem}
+%
+\begin{proof}[Sketch of proof (full proof in Appendix \ref{sec:left-invertibility}, Thm. \ref{thm:sipit-unified}, Prop. \ref{prop:sipit-termination})]
+At each step, local injectivity ensures a unique token matches the observed state. As the policy spans the vocabulary, this token will be found in at most $|\mathcal V|$ trials. Induction over ${t=1,\dots,T}$ completes the argument.
+%
+%The proof proceeds by induction on the position $t$. At each position, the local injectivity from \autoref{rem:localinj} guarantees that there is a unique token $s_t$ that satisfies the verification condition. The covering policy ensures this unique token will be found in at most $|\mathcal V|$ steps. Since this holds for every position $t=1, \ldots, T$, the entire sequence is recovered correctly and in at most $T|\mathcal V|$ steps. The argument applies almost surely because it relies on the almost-sure injectivity of each $F(v \, ; \, \pi_t,t,\ell)$ map encountered along the true sequence's trajectory.
+\end{proof}
+
+In short, \textsc{SipIt} turns the almost-sure injectivity of Transformer representations into a constructive procedure: not only are hidden states unique identifiers of prompts, but the exact input sequence can be efficiently \emph{recovered} in linear time, and often faster in practice.
+%
+%The guarantee behind \textsc{SipIt} is not heuristic: it follows from the same almost-sure injectivity arguments as Section~\ref{sec:inj}. In short, hidden representations in Transformer-based language models are not just distinguishable but \emph{invertible}: one can reconstruct the exact prompt that produced them in \textbf{linear time}. 
+%
+It is a structural property of Transformer representations, not a quirk of initialization or training.
+
+%{\color{red}perhaps stress via a Remark that this is already better than anything else, as nothing is guaranteed to converge in literature, but that in practice is even better: the linear time guarantee is a WORST CASE outcome, normally is much faster, as it will be evident from the experiment}

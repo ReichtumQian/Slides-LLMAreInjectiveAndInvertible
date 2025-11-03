@@ -1,0 +1,143 @@
+\section{Experiments}\label{sec:exps}
+We previously proved that decoder-only Transformers are injective (\S \ref{sec:inj}) and introduced an algorithm, \textsc{SipIt}, that leverages this property to recover the exact input prompt from hidden states at a given layer (\S \ref{sec:inv}). We now provide extensive empirical evidence supporting our theory by showing that distinct prompts yield distinct embeddings, i.e., no collisions occur by a large margin (\S \ref{sec:inj_res}). We then demonstrate that \textsc{SipIt} successfully reconstructs the original input prompt (\S \ref{sec:inv_ref}).
+
+\paragraph{Environment.}
+All experiments were run on a single NVIDIA A100\texttt{-}SXM (64\,GB) GPU. Python~3.11, CUDA~12.2, PyTorch~2.8.0, and \texttt{transformers}~4.50.0 were used for all experiments. Reported runtimes refer to this setup.
+
+\subsection{Searching for collisions}
+\label{sec:inj_res}
+%To complement our theoretical results, we conducted extensive experiments to actively identify collisions in modern language models. 
+%
+We collected 100k prompts by uniformly sampling from a mixture of four datasets: \texttt{wikipedia-en}\footnote{\url{https://huggingface.co/datasets/wikimedia/wikipedia}}, \texttt{C4} \citep{JMLR:v21:20-074}, \texttt{The Pile} \citep{gao2020pile800gbdatasetdiverse}, and \texttt{python-github-code}\footnote{\url{https://huggingface.co/datasets/angie-chen55/python-github-code}}. For each prompt, we extracted the last-token representation and systematically checked whether any two distinct prompts produced identical embeddings. This process required around \textbf{5 billion} pairwise comparisons.
+
+\begin{figure}[t]
+    \vspace{0.5cm}
+    \begin{subfigure}{0.49\textwidth}
+        \centering
+        \begin{overpic}[width=\linewidth]{figures/exhaustive-gpt2-boxplot.pdf}
+    \put(39,40){\small \model{GPT-2 Small}}
+  \end{overpic}
+    \end{subfigure}
+    \hfill 
+    \begin{subfigure}{0.49\textwidth}
+        \centering
+        \begin{overpic}[width=\linewidth]{figures/exhaustive-gemma-3-1b-pt-boxplot.pdf}
+        \put(43,40){\small \model{Gemma3-1B}}
+  \end{overpic}
+    \end{subfigure}
+    \vspace{-0.2cm}
+    \caption{\label{fig:exhaustive-boxplots}Exhaustive collision search on the $10$ closest prefix prompts. The boxplots look flat and uneventful, and that is the point: even under stress-test conditions with billions of candidate pairs, all minima stay well above the collision threshold, showing that nothing collapses.}
+\end{figure}
+
+\begin{wraptable}[12]{r}{0.4\linewidth}
+    \centering
+    \vspace{-0.4cm}  
+    \resizebox{0.4\textwidth}{!}{%
+    \begin{tabular}{c ccc}
+        \toprule
+        \multirow{2}{*}{Model}               & \multicolumn{3}{c}{L2 Distance (min)}                                   \\
+        \cmidrule(r){2-4}
+                            & layer 1                              & layer $\frac{L}{2}$ & layer $L$ \\
+        \midrule
+        \model{Llama-3.1-8B}        & 0.001                                 & 0.129                & 0.620      \\
+        \model{Mistral-7B-v0.1}     & 0.002                                 & 0.187                & 1.274      \\
+        \model{Phi-4-mini-ins} & 0.014                                 & 1.336                & 9.020      \\
+        \model{TinyStories-33M}     & 0.029                                 & 1.434                & 2.793      \\
+        \bottomrule
+    \end{tabular}
+    }
+    \caption{Minimum pairwise distance between last-token states in the first, middle, and final layers of four models. All values are well above the collision threshold $10^{-6}$ (no collisions).}
+    \label{tab:collision-search}
+\end{wraptable}We observed \textbf{no collisions} across all models and layers: distinct prompts always yielded distinct last-token states. Figure \ref{fig:exp-searching-for-collisions} (left) shows the per-layer minimum distances for the \model{Gemma3} pretrained \citep{gemmateam2025gemma3technicalreport} and \model{GPT-2} \citep{Radford2019LanguageMA} families, with strictly positive values throughout. \Cref{tab:collision-search} complements this by reporting the same statistic for \model{Llama-3.1-8B} \citep{grattafiori2024llama3herdmodels}, \model{Mistral-7B-v0.1} \citep{jiang2023mistral7b}, \model{Phi-4-mini-instruct} \citep{microsoft2025phi4minitechnicalreportcompact} and \model{TinyStories-33M} \citep{eldan2023tinystoriessmalllanguagemodels}, again showing clear separation at the first, middle, and last layers.
+
+Finally, Figure \ref{fig:exp-searching-for-collisions} (right) zooms in on \model{GPT-2 Small}, revealing that these distances typically increase with depth. Additional results for \model{GPT-2 Medium}, \model{GPT-2 Large} and \model{Gemma3} (1B, 4B, 12B) appear in Appendix \ref{sec:app:exp}, confirming the same trend.
+
+%
+\begin{wrapfigure}[15]{l}{0.42\textwidth}
+    \centering
+    \vspace{-0.3cm}
+    \begin{overpic}[width=\linewidth,trim=0 10 0 0]{figures/gpt2-distances-vs-length.pdf}
+    \end{overpic}
+    \caption{Sequence length vs. pairwise distance for \model{GPT-2}. Min, mean, and max distances rise at short lengths and then stabilize, indicating consistent separability.}
+    \label{fig:gpt2-length-vs-distance}
+\end{wrapfigure}
+%
+Figure \ref{fig:gpt2-length-vs-distance} shows how pairwise distances between last-token states vary with prompt length in \model{GPT-2 Small}. Three patterns emerge: (i) the \emph{minimum} distance is never close to zero at all lengths, and (ii) it grows rapidly at short lengths but then levels off, suggesting that beyond a moderate context size, adding tokens does not affect separability; (iii) the overall spread (min-max) stays bounded, with no sign of pathological collapses. Similar behavior is seen in \model{Gemma3} (see Appendix \ref{sec:app:exp}, Figure \ref{fig:gemma-length-vs-distance}). Overall, clear margins emerge quickly and then stabilize, making collisions unlikely at any sequence length.
+
+\vspace{1ex}\noindent\textbf{Exhaustive collision  test.}
+Different from previous experiments, in this setting (Figure~\ref{fig:exhaustive-boxplots}), we restrict our analysis to the $10$ prompts from the dataset mixture whose embeddings have the smallest last-token distances. For each of these prompts, we appended \emph{every} vocabulary token and computed all pairwise distances between the resulting last-token states, effectively performing an exhaustive search over continuations and yielding more than \textbf{343 billion} prompt pairs per model.
+
+%We conducted a targeted test designed to stress the model’s local injectivity. From our broad sweep of our previous experiments, we selected the five prompt pairs with the smallest last-token distances, i.e., those closest to colliding. This yielded $10$ total prefixes to test. 
+
+This exhaustive experiment helps rule out the possibility that earlier observations were simply due to chance in random sampling rather than a true absence of collisions. 
+% While a complete search over all prompts would be ideal, such an experiment is computationally infeasible, (more than 34 {\em trillion} pairs for the vocabulary size of \model{Gemma3-1B}).
+While a complete search over all possible prompts would be ideal, it is computationally infeasible. The number of unique prompts grows exponentially with sequence length, and the number of pairwise comparisons grows even faster. For context, even with single-token prompts and the vocabulary size of \model{Gemma3-1B}, there are already over 34 trillion possible prompt pairs, making exhaustive evaluation entirely impractical.
+Our compromise still revealed structure: we identified 5 prompt pairs with highly similar last-token embeddings, suggesting overlapping semantic content and motivating us to ask whether distinct next tokens could preserve meaning, i.e., yield essentially identical last-token hidden states.
+
+Figure~\ref{fig:exhaustive-boxplots} reports the resulting distributions (min/median/mean/max) as boxplots for both \model{GPT-2 Small} and \model{Gemma3-1B}, with distances far from zero (no collision), \textbf{confirming local injectivity} as predicted by our theory.
+
+%Interestingly, one might expect that with a large enough prompt, it should be possible to find two tokens (among the 260K in Gemma, for example) that, when appended to the same prefix, induce nearly indistinguishable last-token embeddings. However, this is not what we observe. In fact, for \model{Gemma-3} the differences are substantial: even tiny variations such as a space versus a tab, or “a” versus “á”, lead to massive separations in embedding space. This suggests that the model is extremely sensitive to even minute semantic or orthographic distinctions—an outcome that, at least to us, was quite unexpected.
+%
+
+%We ran this test on two representative architectures: \model{GPT-2 Small}, which mirrors our theoretical setup, and \model{Gemma3-1B}, a popular open-weight model with growing usage in mechanistic interpretability research. %For \model{Gemma3-1B}, the large vocabulary size ($|\mathcal V|\approx 262$k) makes the search space huge: over 34 \emph{trillion} candidate pairs per prefix.
+
+
+
+%To make the experiment tractable, we curate a set of $10$ prefixes: the two prompts from each of the five closest pairs identified in the broad sweep (smallest last-token distances). These are the most delicate, near-collision cases. For each prefix, we append \emph{every} vocabulary token and compute all pairwise distances among the resulting last-token states, resulting in around \textbf{343 billion} prompt pairs. Figure~\ref{fig:exhaustive-boxplots} reports the resulting distributions (min/median/mean/max) as boxplots for both \model{GPT-2 Small} and \model{Gemma3-1B}, with strictly positive minima and comfortably higher means, \textbf{confirming local injectivity} as predicted by our theory.
+
+%Having established injectivity both mathematically and empirically, we now turn to a stronger question: can we leverage this property to \emph{recover the input itself} from hidden activations?
+
+\subsection{Invertibility results}
+\label{sec:inv_ref}
+
+\renewcommand{\arraystretch}{1.3}
+\begin{wraptable}[10]{r}{0.4\linewidth}
+   \centering
+   \vspace{-0.4cm}
+   \resizebox{0.4\textwidth}{!}{%
+   \begin{tabular}{c c c}
+        \toprule
+      Method                & Mean Time (s) & Accuracy \\
+      \midrule
+      \textsc{HardPrompts}           & $6132.59 \pm 104.61$    & 0.00        \\
+      \textsc{BruteForce} (ours)           & $3889.61 \pm 691.17$    & 1.00        \\
+      \textsc{SipIt} (ours) & $\mathbf{28.01 \pm 35.87}$    & $\mathbf{1.00}$        \\
+      \bottomrule
+   \end{tabular}
+   }
+   \caption{Prompt inversion: \textsc{SipIt} ensures exact recovery efficiently, unlike \textsc{HardPrompts} (no recovery) or brute force (infeasible runtimes).}
+   \label{tab:prompt-inversion}
+\end{wraptable}
+We now test whether the theoretical injectivity translates into exact recovery on pre-trained models. Using \textsc{SipIt} with only the hidden states at a fixed layer, we attempt to reconstruct the full prompt token-by-token for \model{GPT-2 Small}.
+%and \model{Gemma3-1B}.
+%
+%We next evaluate \textsc{SipIt} in practical inversion experiments. 
+%
+We sample 100 prompts, with a $90\%$-$10\%$ split between meaningful sentences and random token sequences (to test robustness in unstructured cases), and attempt to reconstruct them from hidden states. 
+
+We compare against \textsc{HardPrompts}~\citep{HardPrompt}, which leverages gradient signals for approximate prompt discovery, and against a \textsc{SipIt} ablation without the gradient-guided candidate policy (\textsc{BruteForce}).
+
+Other inversion approaches \citep{encoderInversion, LLMInverse, Morris25} tackle a different setting altogether: they operate in black box access, using sequences of next-token logprobs or encoder logits rather than hidden states, and {train} auxiliary inverters to reconstruct text, at high computational cost. Their outputs are typically approximate and not guaranteed exact. These differences make them complementary but not directly comparable to our setting of training-free, \emph{exact} inversion from \emph{hidden states} in decoder-only LMs.
+
+\begin{wrapfigure}[15]{l}{0.27\textwidth}
+    \centering
+    \vspace{-0.5cm}
+    \begin{overpic}[width=\linewidth,trim=0 15 0 0]{figures/sipit_layer_ablation.pdf}
+    \end{overpic}
+    \caption{Inversion time as a function of depth. Runtimes rise only mildly across layers.}
+    \label{fig:per-layer-inversion-times}
+\end{wrapfigure}
+%
+Results are reported in \Cref{tab:prompt-inversion}. Across all prompts (20 tokens each), \textsc{SipIt} recovers the \textbf{exact} sequence with $100\%$ token-level accuracy (no errors, no collisions), matching the theoretical guarantee of linear-time convergence. 
+
+In contrast, \textsc{HardPrompts} fails to recover the true input in most cases, while \textsc{BruteForce} eventually succeeds but at a prohibitive computational cost, requiring several orders of magnitude longer. 
+%Overall, \textsc{SipIt} is the only approach that combines guaranteed correctness with practical runtimes. 
+%
+%As an additional check, we scaled the evaluation to 1000 prompts and again \textsc{SipIt} achieved perfect recovery on every case.
+
+
+Finally, Figure~\ref{fig:per-layer-inversion-times} shows inversion times by layer for longer prompts (ranging from $20$ to $200$ tokens). Although deeper layers are costlier in principle (since verifying a candidate and computing gradients require traversing more blocks), the effect is minor: runtimes rise only slightly from first to last layer, and the scaling remains graceful overall. Likely, earlier layers need more iterations to converge, while deep layers store richer information that reduces the search effort. As a result, the net cost remains stable, confirming \textsc{SipIt} is efficient across depth.
+
+%\Cref{fig:per-layer-inversion-times} shows that inversion times increase gradually with layer depth. This effect is largely due to computational overhead: verifying a candidate at a deeper layer requires a forward pass through more blocks, making each trial slightly more expensive. Nonetheless, the scaling is graceful: the mean shifts only by a few seconds between the first and the last layer, indicating that \textsc{SipIt} remains efficient across the entire network. {\color{red} i think this is not the main reason. the forward pass is not the problem, the backward is done in way fewer layers, and at the same time the method takes less iteration overall on average to converge to the correct token on earlier layers. I dont have the exact stats but i remember it being the case for tinystories at least.}
+
+%\newpage

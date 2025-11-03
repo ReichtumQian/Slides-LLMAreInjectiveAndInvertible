@@ -1,0 +1,48 @@
+\section{Additional Experiments and Implementation Details}\label{sec:app:exp}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/all_gemma_layer_boxplots.pdf}
+    \caption{Seeking collisions in a large-scale prompt set (\S\ref{sec:inj_res}). For each layer, boxplots (log scale) show the distribution of \emph{minimum pairwise} $\ell_2$ distances between last-token states across prompts for the \texttt{Gemma-3} model family (1B, 4B, 12B); red bars denote medians and the dashed line marks the collision threshold $10^{-6}$.}
+    \label{fig:gemma-full-layer}
+\end{figure}
+
+\subsection{Implementation Details}
+
+\paragraph{\textsc{\textsc{Sip-It}} implementation.}
+We implement \textsc{\textsc{Sip-It}} exactly as in Alg.~\ref{alg:sipit-main} with the gradient-guided policy. To stabilize the continuous proxy used for ranking, we periodically project it back to the nearest token embedding every $K\!=\!50$ candidate proposals:
+\[
+\mathbf{e}^{(j)} \;\leftarrow\; \mathbf{E}_{v^\dagger},
+\qquad
+v^\dagger \;=\; \arg\min_{v\in\mathcal{V} \setminus \mathcal{C}}\big\|\mathbf{E}_v-\mathbf{e}^{(j)}\big\|_2,
+\]
+without taking gradients through this projection. This heuristic affects efficiency only; the verifier and all correctness guarantees remain unchanged.
+
+\paragraph{\textsc{HardPrompts} implementation.}
+The original \textsc{HardPrompts} method~\cite{HardPrompt} targets multimodal vision-language models and optimizes prompts via a CLIP-based similarity objective. In our text-only setting we lack the vision branch and CLIP loss, so we adapt Algorithm~1 of~\cite{HardPrompt} to language models by replacing the objective with the same $\ell_2$ loss used in \textsc{\textsc{Sip-It}}'s gradient calculation, and setting the optimization steps $T = \tfrac14 \text{\# tokens} \cdot |\mathcal{V}|$. All other details (step sizes, stopping rules) mirror our \textsc{\textsc{Sip-It}} setup to ensure a fair comparison. 
+
+
+
+\subsection{Additional Ablations}\label{sec:app:ablations}
+
+We report three complementary ablations that probe how separation behaves across depth, length, and model family.
+
+\textbf{GPT-2 family across depth.}
+For \texttt{GPT-2 Small}, \texttt{GPT-2 Medium}, and \texttt{GPT-2 Large}, the per-layer boxplots (log scale) of the \emph{minimum pairwise} $\ell_2$ distances between last-token states in \autoref{fig:gpt-full-layer} show that all minima sit orders of magnitude above the collision threshold $10^{-6}$ at every depth, and the typical separation \emph{increases with depth} (median red bars drift upward). This rules out collisions in practice and indicates that deeper blocks monotonically sharpen last-token distinctions in these models.
+
+\begin{wrapfigure}[14]{l}{0.5\textwidth}
+    \centering
+    \vspace{-0.5cm}
+    \includegraphics[width=\linewidth]{figures/gemma-3-1b-pt-distances-vs-length.pdf}
+    \vspace{-0.5cm}
+    \caption{Sequence length versus distance over all pairs of distinct prompts for \model{Gemma-1B}.}
+    \label{fig:gemma-length-vs-distance}
+\end{wrapfigure}
+
+\textbf{Gemma-3 family across depth and scale.}
+Across \texttt{Gemma3-1B}, \texttt{Gemma3-4B}, and \texttt{Gemma3-12B}, the layerwise boxplots (log scale) in \autoref{fig:gemma-full-layer} again show minima far above $10^{-6}$ at all depths. Both depth \emph{and} model size trend positively with separation: medians and lower whiskers move upward in deeper layers and larger models, indicating progressively stronger margins and no observed collisions.
+
+\textbf{Effect of sequence length (Gemma-1B).}
+Varying the prompt length reveals that min/mean/max pairwise distances rise quickly for short sequences and then plateau, with the minimum never approaching zero (see \autoref{fig:gemma-length-vs-distance}). This suggests that beyond a modest context size, additional tokens do not erode separability; margins stabilize rather than collapse, making collisions unlikely for any prompt length explored.
+
+Overall, these ablations corroborate the main text: last-token states remain well-separated across architectures and depths, separation typically grows with depth (and scale for Gemma), and margins stabilize with sequence length, aligning with our almost-sure injectivity guarantees and with \textsc{Sip-It}’s exact recovery behavior.

@@ -1,0 +1,146 @@
+\section{Transformers are injective}\label{sec:inj}
+
+\paragraph{Summary.}
+In this section we show that decoder-only Transformers almost surely map different prompts to different hidden states. Collisions can only occur under measure-zero parameter choices, and gradient-based training never creates them. In simple terms, Transformer representations are structurally lossless.
+
+\paragraph{Approach.}
+We consider causal decoder-only Transformer language models with vocabulary $\mathcal V$, finite context window $K$, and embedding dimension $d$. For an input sequence $\mathrm{s} \in \mathcal V^{\leq K}$, let $\mathbf r(\mathrm{s} \,;\, \bm{\theta})$ denote the final hidden representation at the \emph{last} token position\footnote{We focus on the last-token state, since it alone drives next-token prediction; earlier rows matter only insofar as they shape this final state. Injectivity at the last token is the property of real operational interest.}, given parameters $\bm{\theta}$.
+
+Our analysis relies on three facts:
+
+\begin{enumerate}[label=(\roman*)]
+\item \emph{Real-analyticity.} Each component of the architecture (embeddings, positional encodings, LayerNorm with ${\varepsilon>0}$, causal attention, MLPs with analytic activations, residuals) is real-analytic in its parameters (see Appendix \ref{subsec:real-analyticity} for the mathematical background). This smoothness implies that the set of parameter values causing two distinct prompts to collide is extremely thin (measure zero).
+
+\item \emph{Initialization.} Standard initialization schemes (Gaussian, uniform, Xavier/Glorot, etc.) draw parameters from continuous distributions with densities, so they avoid measure-zero sets with probability one.
+
+\item \emph{Training.} Gradient-based updates (including SGD and mini-batch/full-batch GD) preserve absolute continuity of the parameter distribution after any finite number of steps; thus, training cannot generate collisions.
+\end{enumerate}
+
+These facts allow us to state and prove injectivity results without relying on asymptotics.
+
+%\paragraph{Main results.}
+%
+We begin by establishing the analytic structure of the architecture.
+
+\begin{theorem}[Transformers are real-analytic]\label{th:main:realan}
+Fix embedding dimension $d$ and context length $K$. Assume the MLP activation is real-analytic (e.g. tanh, GELU). Then for every input sequence $\mathrm{s} \in\mathcal{V}^{\le K}$, the map
+%
+\begin{align}
+(\mathrm{s},\bm{\theta}) \mapsto \mathbf{r}(\mathrm{s} \,;\, \bm{\theta}) \in \mathbb{R}^d
+\end{align}
+%
+is real-analytic jointly in the parameters $\bm{\theta}$ and the input embeddings.
+\end{theorem}
+
+\begin{proof}[Sketch of proof (full proof in Appendix \ref{sec:app:trans}, Proposition \ref{prop:modules-ra})]
+Each building block is real-analytic:  polynomials (embeddings, projections), exponential and softmax (attention), reciprocal square root (LayerNorm with $\varepsilon>0$), analytic activations in the MLP, and affine maps. Real-analytic functions are closed under addition, multiplication, quotient, and composition. Since the Transformer is a finite composition of such blocks, the entire map is real-analytic.
+\end{proof}
+
+\begin{wrapfigure}[18]{r}{0.4\linewidth}
+  \vspace{-0.8cm}
+  \centering
+  \begin{overpic}[width=\linewidth]{figures/real_analytic_fns.png}
+    % Example overlays:
+    \put(7,35){\small $f_1$}
+    \put(85,35){\small $f_2$}
+    \put(70, 5){\small $f_1 - f_2$}
+  \end{overpic}
+  \vspace{-0.5cm}
+  \caption{\label{fig:analzero}Two real-analytic functions $f_1$ and $f_2$ and their difference $f_1-f_2$. Black contours show the zero sets, which form thin curves (measure zero) rather than regions of positive measure.}
+\end{wrapfigure}
+%
+
+This smoothness result drives everything that follows: it ensures that collisions, if they exist, are confined to measure-zero parameter sets. We now ask: what happens at initialization?
+
+\begin{theorem}[Almost-sure injectivity at initialization]\label{th:main:asinj}
+Let $\bm{\theta}$ be drawn from any distribution with a density (e.g. Gaussian or uniform). Then for any two distinct prompts $\mathrm{s}, \mathrm{s}' \in \mathcal V^{\le K}$,
+\begin{align}
+    \Pr[\mathbf{r}(\mathrm{s}\,;\,\bm{\theta}) = \mathbf{r}(\mathrm{s}'\,;\,\bm{\theta})] = 0 \,.
+\end{align}
+\end{theorem}
+
+% \begin{proof}
+% Sketch. Fix $s \neq t$. Consider the squared distance $h(\theta) = |\mathbf r_s(\theta) - \mathbf r_t(\theta)|_2^2$. By Theorem \ref{th:main:realan}, $h$ is real-analytic. If $h$ were identically zero, collisions would occur for all parameters. We explicitly construct parameter settings (e.g. simple embeddings and positional encodings, or attention separating tokens) that yield $\mathbf r_s \neq \mathbf r_t$. Thus, $h$ is not identically zero. By the zero-set theorem for real-analytic functions, ${\theta : h(\theta) = 0}$ has measure zero. Since initialization distributions have densities, the probability of sampling such $\theta$ is zero.
+% \end{proof}
+
+\begin{proof}[Sketch of proof (full proof in Appendix \ref{sec:app:asinj}, Theorem \ref{thm:a.s.-distinct-h1})]
+Fix $\mathrm{s} \neq \mathrm{s}'$ and consider
+%
+\begin{align}
+h(\bm{\theta})=\|\mathbf r(\mathrm{s}\,;\,\bm{\theta})-\mathbf r(\mathrm{s}'\,;\,\bm{\theta})\|_2^2 \,.
+\end{align}
+%
+By Theorem \ref{th:main:realan}, $h$ is real-analytic. A fundamental dichotomy of real-analytic functions states that either $h$ is identically zero, or its zero set has Lebesgue measure zero (see Figure \ref{fig:analzero} for an illustration). Therefore, to rule out the pathological case $h\equiv0$ it suffices to exhibit a single parameter setting where $\mathbf r(\mathrm{s} \,;\,\bm{\theta})\neq \mathbf r(\mathrm{s}'\,;\,\bm{\theta})$. 
+
+This can always be done: if $\mathrm{s}$ and $\mathrm{s}'$ differ at the last position (symbol or length), freeze the network so that the last state reduces to embedding plus position, and choose distinct rows; this already separates $\mathbf r(\mathrm{s})$ and $\mathbf r(\mathrm{s}')$.
+%
+If instead they differ earlier, let $i^\star$ be the first mismatch and set one attention head so the last position attends almost entirely to $i^\star$, encoding its token in the value; this forces different outputs for $\mathrm{s}$ and $\mathrm{s}'$.
+
+Hence $h$ is not identically zero, and so the collision set $\{\bm{\theta}: h(\bm{\theta})=0\}$ has Lebesgue measure zero. Since standard initializations have densities, the probability of sampling such $\bm{\theta}$ is zero, and $\mathbf r(\mathrm{s}\,;\,\bm{\theta})\neq \mathbf r(\mathrm{s}'\,;\,\bm{\theta})$ (injectivity) holds almost surely at initialization.
+\end{proof}
+
+According to Theorem \ref{th:main:asinj}, at initialization, collisions are mathematically impossible except on a vanishingly small set of parameter values. Finally, with the following Theorem we ensure training does not break injectivity.
+
+\begin{theorem}[Injectivity preserved under training]
+\label{thm:gdinjec}
+Let $\bm{\theta}_0$ be initialized from a distribution with a density, and let $\bm{\theta}_T$ be the parameters after $T$ steps of gradient descent with step sizes in $(0,1)$. Then with probability one,
+\begin{align}
+ \mathrm{s}\neq \mathrm{s}'
+\quad\Longrightarrow\quad
+\mathbf r(\mathrm{s} \,;\, \boldsymbol\theta_T)\neq \mathbf r(\mathrm{s}' \,;\, \boldsymbol\theta_T)\,,
+\end{align}
+\end{theorem}
+%
+\begin{proof}[Sketch of proof (full proof in Theorems \ref{thm:main} and \ref{thm:ac-gd})]
+%
+At initialization, $\bm{\theta}_0$ is drawn from a distribution with a density, hence absolutely continuous. To break injectivity during training, GD would need to map this continuous law onto the measure-zero collision set identified in Theorem~\ref{th:main:asinj}. We show this cannot happen.
+
+A single GD step is the map $\phi(\bm{\theta}) = \bm{\theta} - \eta \nabla \mathcal L(\bm{\theta})$, where $\mathcal L$ is the training loss. Because the network and the softmax cross-entropy loss are real-analytic, $\phi$ is also real-analytic.
+%
+Its Jacobian determinant $\det D\phi(\bm{\theta})$ is itself real-analytic and not identically zero (one can check this by evaluating at a simple parameter setting). Hence the set where $\det D\phi = 0$ has measure zero.
+%
+Away from that set, the Inverse Function Theorem applies: $\phi$ is a smooth, locally invertible change of coordinates that can stretch or bend space but cannot collapse regions of positive volume onto lower-dimensional sets. Therefore, pushing forward an absolutely continuous distribution through $\phi$ yields another absolutely continuous distribution. 
+
+Since this argument holds for each step, any finite sequence of GD updates preserves absolute continuity of the parameter law. Combining with Theorem~\ref{th:main:asinj}, which shows that collision sets are measure-zero, we conclude that $\mathbf r(\mathrm{s}\,;\,\bm{\theta}_T) \neq \mathbf r(\mathrm{s}'\,;\,\bm{\theta}_T)$ almost surely for all $\mathrm{s}\neq \mathrm{s}'$.
+\end{proof}
+
+Thus injectivity is not just an initialization property but remains true throughout training. A simple but important corollary follows.
+
+\begin{corollary}[SGD and mini-batch GD]
+Under the assumptions of Theorem~\ref{thm:gdinjec}, the same conclusion holds when the updates are
+\(
+\bm{\theta}_{t+1}=\bm{\theta}_t-\eta_t\,\nabla_\theta \mathcal{L}_{\mathcal{B}_t}(\bm{\theta}_t)
+\)
+with arbitrary (possibly random or adversarial) batch selections $\mathcal{B}_t$, thus including the singleton case of SGD and the full dataset. 
+\end{corollary}
+%
+% \begin{proof}
+% The proof argument of Theorem~\ref{thm:gdinjec} is unchanged: for each fixed batch $\mathcal{B}$, the update map $\phi_{\mathcal{B}}(\bm{\theta})=\bm{\theta}-\eta\nabla \mathcal{L}_{\mathcal{B}}(\bm{\theta})$ is real-analytic with a Jacobian that is not identically zero, so the finite composition of such maps preserves absolute continuity of the parameter law.
+% \end{proof}
+\begin{proof}
+The proof argument of Theorem~\ref{thm:gdinjec} is unchanged: for each fixed batch $\mathcal{B}$, the update map $\phi_{\mathcal{B}}(\bm{\theta})=\bm{\theta}-\eta\nabla \mathcal{L}_{\mathcal{B}}(\bm{\theta})$ is real-analytic with a Jacobian that is not identically zero. Indeed, the batch loss is the average $\mathcal{L}_{\mathcal B}=\tfrac1{|\mathcal B|}\sum_{i = 1}^{|\mathcal{B}|}\mathcal{L}_i$, so at the point $\bm{\theta}_\star$ from the single-sample proof (where the Jacobian determinant is sample-independent and nonzero) the batch Jacobian coincides with the single-sample one by linearity of differentiation, and its determinant is therefore also nonzero. Thus, the finite composition of such maps preserves absolute continuity of the parameter law.
+\end{proof}
+%
+Together with this robustness to different training regimes, we can also strengthen the guarantee itself: injectivity holds not just pairwise, but globally across finite sets of prompts.
+
+\begin{corollary}[Distinctness for finite sets]
+For any finite set of prompts $\mathcal{S} \subseteq \mathcal V^{\le K}$, the representations 
+$\{\mathbf r(\mathrm{s}\,;\,\bm{\theta}_T) : \mathrm{s} \in \mathcal{S}\}$ are almost surely all distinct.
+\end{corollary}
+%
+\begin{proof}See Appendix \ref{sec:app:asinj}, Corollary \ref{cor:global-distinct-h1}.
+\end{proof}
+
+These results show that decoder-only Transformer language models are structurally injective: different prompts almost surely yield different last-token states. Collisions can be manufactured, e.g., through deliberate non-analytic choices (quantization, non-smooth activations), but in practical training pipelines, injectivity is guaranteed; extensive experiments in \S\ref{sec:inj_res} confirm this empirically.
+
+\paragraph{Failure cases.}
+We showed that non-injective transformers are overwhelmingly unlikely, though it is still possible for an adversary to construct collisions by hand. For instance, if two vocabulary items $v_i \neq v_j$ are assigned \emph{exactly} the same embedding vector, then any prompts differing only by swapping $v_i$ and $v_j$ yield identical representations. Likewise, if two absolute positional embeddings are made exactly equal and the remaining weights are tuned to suppress other positional signals, one can force collisions between sequences that differ only at those positions. These scenarios, however, require deliberately engineered parameter choices: under continuous random initialization and standard training, the probability of such coincidences is zero.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.95\linewidth]{figures/combined_swarm_boxplot.pdf}
+    \caption{Seeking collisions in a large-scale prompt set (\S\ref{sec:inj_res}). The minimum distances between last-token states are far above the collision threshold $10^{-6}$: (left) across layers for \model{GPT-2} and \model{Gemma-3} families (one dot per layer), (right) across depth for \model{GPT-2 Small}, where distances grow with depth.}
+    \label{fig:exp-searching-for-collisions}
+\end{figure}
+
+

@@ -1,0 +1,504 @@
+% !TEX program = xelatex
+\documentclass[9pt]{beamer}
+\usepackage{hyperref}
+\usepackage[T1]{fontenc}
+\usepackage{fontspec}
+\usefonttheme[onlymath]{serif}
+% \setmainfont{[LXGWWenKai-Regular.ttf]}
+% \setmainfont{Times New Roman}
+% \setsansfont{LXGWWenKai-Regular.ttf}[Path=../../fonts/]
+\usepackage{mathpazo}
+\usepackage{libertine}
+\usepackage[libertine]{newtxmath}
+% \setCJKmainfont{[LXGWWenKai-Regular.ttf]}
+% \setCJKsansfont{[../../fonts/LXGWWenKai-Regular.ttf]}
+
+% \usepackage[orientation=landscape,size=custom,width=16,height=9,scale=0.4,debug]{beamerposter}
+% 修改 slides 比例，
+
+% other packages
+\usepackage{latexsym,amsmath,xcolor,multicol,booktabs,calligra}
+\usepackage{graphicx,pstricks,listings,stackengine,cite}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{xcolor}
+\usepackage{amsthm}
+\newtheorem{proposition}{Proposition}
+\usepackage{subcaption}
+\usepackage{multirow}
+
+\renewcommand{\algorithmicrequire}{ \textbf{Input:}} %Use Input in the format of Algorithm
+\renewcommand{\algorithmicensure}{ \textbf{Output:}} %UseOutput in the format of Algorithm
+% for break
+\newcommand{\algorithmicbreak}{\textbf{break}}
+\newcommand{\BREAK}{\STATE \algorithmicbreak}
+
+\setbeamertemplate{bibliography item}[text]
+\bibliographystyle{plain}
+% 如果参考文献太多的话，可以像下面这样调整字体：
+% \tiny\bibliographystyle{plain}
+
+\author{Yixiao Qian}
+\title{Large Language Models are Injective and Invertible}
+% \subtitle{Paper Reading Seminar}
+\institute{School of Mathematics, Zhejiang University}
+\date{\today}
+\usepackage{College}
+
+% defs
+\def\cmd#1{\texttt{\color{red}\footnotesize $\backslash$#1}}
+\def\env#1{\texttt{\color{blue}\footnotesize #1}}
+\definecolor{deepblue}{rgb}{0,0,0.5}
+\definecolor{deepred}{rgb}{0.6,0,0}
+\definecolor{deepgreen}{rgb}{0,0.5,0}
+\definecolor{halfgray}{gray}{0.55}
+
+% Fix for quote characters in beamer
+\usepackage{upquote}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\bfseries\color{deepblue},
+    emphstyle=\ttfamily\color{deepred},    % Custom highlighting style
+    stringstyle=\color{deepgreen},
+    numbers=left,
+    numberstyle=\small\color{halfgray},
+    rulesepcolor=\color{red!20!green!20!blue!20},
+    frame=shadowbox,
+}
+
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+  \begin{figure}[htpb]
+    \begin{center}
+      \vspace*{-0.5cm}
+      \includegraphics[width=0.2\linewidth]{pic/ZJU.png}
+    \end{center}
+  \end{figure}
+\end{frame}
+
+\begin{frame}{Table of Contents}
+  \tableofcontents
+\end{frame}
+
+% ============================================================
+% Section 1: Introduction & Motivation
+% ============================================================
+\section{Introduction \& Motivation}
+
+\begin{frame}{Background: LLM Representations}
+  \begin{itemize}
+    \item Large Language Models (LLMs) use Transformer architectures
+    \item Map discrete input sequences to continuous hidden representations
+    \item Key question: Are these representations \textbf{lossless}?
+  \end{itemize}
+
+  \vspace{1em}
+  \textbf{Common assumption:}
+  \begin{itemize}
+    \item Non-linear activations (GELU, softmax)
+    \item Layer normalization
+    \item Attention mechanisms
+    \item $\Rightarrow$ Different inputs \emph{could} collapse to same representation
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Research Question}
+  \begin{columns}
+    \begin{column}{0.5\textwidth}
+      \begin{block}{Central Question}
+        Can different prompts map to the same hidden state in Transformer LMs?
+      \end{block}
+
+      \vspace{0.5em}
+      This paper challenges the conventional view by proving:
+      \begin{enumerate}
+        \item Transformer LMs are \textbf{injective} (almost surely)
+        \item Hidden representations can be \textbf{inverted} to recover exact input
+        \item Practical algorithm \textsc{SipIt} for prompt reconstruction
+      \end{enumerate}
+
+      \vspace{0.5em}
+      \small{\textbf{Implications:} Transparency, interpretability, safe deployment}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{figure}
+        \centering
+        \includegraphics[width=\textwidth]{../arXiv-2510.15511v3/figures/teaser.pdf}
+        \caption{The map from prompts to latent space is injective. \textsc{SipIt} inverts it.}
+      \end{figure}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ============================================================
+% Section 2: Main Theoretical Results - Injectivity
+% ============================================================
+\section{Theoretical Results: Injectivity}
+
+\begin{frame}{Key Insight: Real Analyticity}
+  \begin{columns}
+    \begin{column}{0.58\textwidth}
+      \begin{theorem}[Transformers are real-analytic]
+        For embedding dimension $d$, context length $K$, and real-analytic activation (e.g., GELU, tanh),
+        the map $(\mathrm{s}, \boldsymbol{\theta}) \mapsto \mathbf{r}(\mathrm{s}; \boldsymbol{\theta}) \in \mathbb{R}^d$
+        is real-analytic in parameters $\boldsymbol{\theta}$.
+      \end{theorem}
+
+      \vspace{0.5em}
+      \textbf{Why it matters:}
+      \begin{itemize}
+        \item Real-analytic functions have measure-zero collision sets
+        \item Either identically zero or zero set has measure zero
+        \item Standard initializations avoid measure-zero sets w.p. 1
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.4\textwidth}
+      \begin{figure}
+        \centering
+        \includegraphics[width=\textwidth]{../arXiv-2510.15511v3/figures/real_analytic_fns.png}
+        \caption{Two real-analytic functions and their difference. Zero sets form thin curves (measure zero).}
+      \end{figure}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Almost-Sure Injectivity at Initialization}
+  \begin{theorem}[Injectivity at initialization]
+    Let $\boldsymbol{\theta}$ be drawn from any distribution with density (e.g., Gaussian).
+    Then for distinct prompts $\mathrm{s}, \mathrm{s}' \in \mathcal{V}^{\leq K}$:
+    \[
+      \Pr[\mathbf{r}(\mathrm{s}; \boldsymbol{\theta}) = \mathbf{r}(\mathrm{s}'; \boldsymbol{\theta})] = 0
+    \]
+  \end{theorem}
+
+  \vspace{1em}
+  \textbf{Proof sketch:}
+  \begin{itemize}
+    \item Define $h(\boldsymbol{\theta}) = \|\mathbf{r}(\mathrm{s}; \boldsymbol{\theta}) - \mathbf{r}(\mathrm{s}'; \boldsymbol{\theta})\|_2^2$
+    \item Show $h$ is real-analytic (by composition)
+    \item Construct parameter settings where $\mathbf{r}(\mathrm{s}) \neq \mathbf{r}(\mathrm{s}')$
+    \item Therefore $h \not\equiv 0 \Rightarrow$ zero set has measure zero
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Injectivity Preserved Under Training}
+  \begin{theorem}[Training preserves injectivity]
+    After $T$ steps of gradient descent with step sizes in $(0,1)$, with probability one:
+    \[
+      \mathrm{s} \neq \mathrm{s}' \Longrightarrow \mathbf{r}(\mathrm{s}; \boldsymbol{\theta}_T) \neq \mathbf{r}(\mathrm{s}'; \boldsymbol{\theta}_T)
+    \]
+  \end{theorem}
+
+  \vspace{1em}
+  \textbf{Key ideas:}
+  \begin{itemize}
+    \item GD update $\phi(\boldsymbol{\theta}) = \boldsymbol{\theta} - \eta \nabla \mathcal{L}(\boldsymbol{\theta})$ is real-analytic
+    \item Jacobian determinant $\det D\phi$ not identically zero
+    \item Inverse Function Theorem: preserves absolute continuity
+    \item Finite composition of GD steps preserves measure properties
+  \end{itemize}
+\end{frame}
+
+% ============================================================
+% Section 3: Invertibility - The SipIt Algorithm
+% ============================================================
+\section{Invertibility: The \textsc{SipIt} Algorithm}
+
+\begin{frame}{From Injectivity to Invertibility}
+  \textbf{Injectivity $\Rightarrow$ Hidden states uniquely identify inputs}
+
+  \vspace{1em}
+  But can we \emph{actually recover} the input from hidden states?
+
+  \vspace{1em}
+  \begin{block}{\textsc{SipIt}: Sequential Inverse Prompt via Iterative Updates}
+    Algorithm that reconstructs exact input text from hidden activations
+    \begin{itemize}
+      \item Exploits causal structure of Transformers
+      \item Guaranteed linear-time complexity: $O(T \cdot |\mathcal{V}|)$
+      \item Often much faster in practice
+    \end{itemize}
+  \end{block}
+\end{frame}
+
+\begin{frame}{Key Idea: Causal Structure}
+  \textbf{Observation:} Hidden state at position $t$ depends only on:
+  \begin{itemize}
+    \item Prefix: $\langle \mathrm{s}_1, \ldots, \mathrm{s}_{t-1} \rangle$
+    \item Current token: $\mathrm{s}_t$
+  \end{itemize}
+
+  \vspace{1em}
+  \textbf{Strategy:}
+  \begin{enumerate}
+    \item Recover tokens sequentially from left to right
+    \item At position $t$: given recovered prefix, try each vocab token
+    \item Check which candidate produces matching hidden state
+    \item Local injectivity ensures unique match
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}[fragile]{The \textsc{SipIt} Algorithm}
+  \begin{algorithm}[H]
+    \caption{\textsc{SipIt}}
+    \begin{algorithmic}[1]
+      \REQUIRE Observed hidden states $\widehat{\mathbf{H}}^{(\ell)}$, vocabulary $\mathcal{V}$, tolerance $\varepsilon$
+      \ENSURE Recovered sequence $\widehat{\mathrm{s}}$
+      \STATE $\widehat{\mathrm{s}} \gets \langle \rangle$
+      \FOR{$t = 1$ to $T$}
+        \FOR{$j = 1$ to $|\mathcal{V}|$}
+          \STATE $v_j \gets \textsc{Policy}(\mathcal{V}, \mathcal{C}, \widehat{\mathrm{s}}, \ell)$
+          \IF{$\widehat{\mathbf{h}}_t$ matches candidate $v_j$ (within $\varepsilon$)}
+            \STATE $\widehat{\mathrm{s}} \gets \widehat{\mathrm{s}} \oplus v_j$
+            \STATE \textbf{break}
+          \ENDIF
+        \ENDFOR
+      \ENDFOR
+      \RETURN $\widehat{\mathrm{s}}$
+    \end{algorithmic}
+  \end{algorithm}
+\end{frame}
+
+\begin{frame}{Theoretical Guarantee}
+  \begin{theorem}[Correctness of \textsc{SipIt}]
+    Given observed hidden states $\widehat{\mathbf{H}}^{(\ell)}$, \textsc{SipIt} recovers
+    the true input sequence with probability one in at most $T \cdot |\mathcal{V}|$ steps.
+  \end{theorem}
+
+  \vspace{1em}
+  \textbf{Key points:}
+  \begin{itemize}
+    \item Worst-case linear time bound
+    \item Exact recovery (not approximate)
+    \item Works at any layer $\ell$
+    \item In practice: often much faster with gradient-guided policy
+  \end{itemize}
+\end{frame}
+
+% ============================================================
+% Section 4: Experimental Validation
+% ============================================================
+\section{Experimental Validation}
+
+\begin{frame}{Collision Search Experiments}
+  \textbf{Setup:}
+  \begin{itemize}
+    \item 100k prompts from Wikipedia, C4, The Pile, Python code
+    \item ~5 billion pairwise comparisons
+    \item Models: GPT-2 family, Gemma-3 family, Llama-3.1, Mistral, Phi-4
+  \end{itemize}
+
+  \vspace{0.5em}
+  \textbf{Result:} \textcolor{red}{\textbf{Zero collisions}} found across all models and layers
+
+  \begin{figure}
+    \centering
+    \includegraphics[width=0.85\textwidth]{../arXiv-2510.15511v3/figures/combined_swarm_boxplot.pdf}
+    \caption{Minimum distances between last-token states across layers. All distances $\gg 10^{-6}$.}
+  \end{figure}
+\end{frame}
+
+\begin{frame}{Exhaustive Collision Test}
+  \begin{columns}
+    \begin{column}{0.48\textwidth}
+      \textbf{Stress test:}
+      \begin{itemize}
+        \item Select 10 closest prompt pairs from dataset
+        \item Append \emph{every} vocabulary token to each
+        \item Compute all pairwise distances
+        \item Result: \textbf{343+ billion} prompt pairs tested
+      \end{itemize}
+
+      \vspace{0.5em}
+      \textbf{Findings:}
+      \begin{itemize}
+        \item Still no collisions found
+        \item All distances well above zero
+        \item Confirms local injectivity
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{figure}
+        \centering
+        \includegraphics[width=\textwidth]{../arXiv-2510.15511v3/figures/exhaustive-gpt2-boxplot.pdf}
+        \caption{Exhaustive test on GPT-2: all minima stay well above collision threshold.}
+      \end{figure}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Distance vs Sequence Length}
+  \begin{columns}
+    \begin{column}{0.48\textwidth}
+      \begin{figure}
+        \centering
+        \includegraphics[width=\textwidth]{../arXiv-2510.15511v3/figures/gpt2-distances-vs-length.pdf}
+        \caption{GPT-2: distances grow at short lengths then stabilize.}
+      \end{figure}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{figure}
+        \centering
+        \includegraphics[width=\textwidth]{../arXiv-2510.15511v3/figures/gemma-3-1b-pt-distances-vs-length.pdf}
+        \caption{Gemma-3: similar pattern across sequence lengths.}
+      \end{figure}
+    \end{column}
+  \end{columns}
+
+  \vspace{0.5em}
+  \small{\textbf{Observation:} Minimum distance never close to zero at any length; grows rapidly at short lengths then levels off.}
+\end{frame}
+
+\begin{frame}{Invertibility: \textsc{SipIt} Performance}
+  \begin{columns}
+    \begin{column}{0.55\textwidth}
+      \textbf{Setup:}
+      \begin{itemize}
+        \item 100 prompts (90\% natural, 10\% random)
+        \item Reconstruct from hidden states
+        \item Compare methods
+      \end{itemize}
+
+      \vspace{0.5em}
+      \textbf{Results on GPT-2 Small:}
+      \begin{center}
+      \scriptsize
+      \begin{tabular}{lcc}
+        \toprule
+        Method & Time (s) & Acc \\
+        \midrule
+        \textsc{HardPrompts} & 6132.59 & 0.00 \\
+        Brute Force & 3889.61 & 1.00 \\
+        \textsc{SipIt} & \textbf{28.01} & \textbf{1.00} \\
+        \bottomrule
+      \end{tabular}
+      \end{center}
+
+      \vspace{0.3em}
+      \small{\textsc{SipIt}: \textbf{100\%} accuracy, \textbf{100$\times$} faster}
+    \end{column}
+    \begin{column}{0.43\textwidth}
+      \begin{figure}
+        \centering
+        \includegraphics[width=\textwidth]{../arXiv-2510.15511v3/figures/sipit_layer_ablation.pdf}
+        \caption{Inversion time vs layer depth: graceful scaling.}
+      \end{figure}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Additional Results: Multiple Models}
+  \begin{center}
+  \small
+  \begin{tabular}{lccc}
+    \toprule
+    \multirow{2}{*}{Model} & \multicolumn{3}{c}{L2 Distance (minimum)} \\
+    \cmidrule(r){2-4}
+    & Layer 1 & Layer $L/2$ & Layer $L$ \\
+    \midrule
+    Llama-3.1-8B & 0.001 & 0.129 & 0.620 \\
+    Mistral-7B-v0.1 & 0.002 & 0.187 & 1.274 \\
+    Phi-4-mini-instruct & 0.014 & 1.336 & 9.020 \\
+    TinyStories-33M & 0.029 & 1.434 & 2.793 \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+
+  \vspace{1em}
+  \textbf{Key observations:}
+  \begin{itemize}
+    \item All minimum distances $\gg 10^{-6}$ (collision threshold)
+    \item Distances typically increase with depth
+    \item Consistent across different model sizes and architectures
+  \end{itemize}
+\end{frame}
+
+% ============================================================
+% Section 5: Implications and Discussion
+% ============================================================
+\section{Implications \& Discussion}
+
+\begin{frame}{Key Takeaways}
+  \begin{enumerate}
+    \item \textbf{Theoretical:} Transformer LMs are structurally injective
+    \begin{itemize}
+      \item Almost-sure property from real analyticity
+      \item Preserved during training
+      \item Not an asymptotic result—holds at finite width/depth
+    \end{itemize}
+
+    \vspace{0.5em}
+    \item \textbf{Practical:} Hidden states are invertible
+    \begin{itemize}
+      \item \textsc{SipIt} achieves exact recovery in linear time
+      \item Confirmed across multiple state-of-the-art models
+      \item No collisions in billions of tests
+    \end{itemize}
+
+    \vspace{0.5em}
+    \item \textbf{Implications:}
+    \begin{itemize}
+      \item Transparency: activations fully encode inputs
+      \item Interpretability: can trace back to exact prompts
+      \item Security: hidden states leak complete information
+    \end{itemize}
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Limitations \& Future Work}
+  \textbf{Known failure cases (by design):}
+  \begin{itemize}
+    \item Tied embeddings for different tokens
+    \item Quantization or non-smooth activations
+    \item Deliberately engineered collision parameters
+  \end{itemize}
+
+  \vspace{1em}
+  \textbf{Future directions:}
+  \begin{itemize}
+    \item Extend to encoder-decoder architectures
+    \item Study injectivity in multi-modal models
+    \item Applications in model interpretability
+    \item Privacy implications and defenses
+    \item Theoretical analysis of other architectures (State Space Models, etc.)
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Conclusion}
+  \begin{block}{Main Result}
+    Transformer language models are \textbf{almost-surely injective} and \textbf{efficiently invertible}
+  \end{block}
+
+  \vspace{1em}
+  \textbf{Contributions:}
+  \begin{enumerate}
+    \item Rigorous proof of injectivity via real-analytic theory
+    \item First exact inversion algorithm (\textsc{SipIt}) with provable guarantees
+    \item Extensive empirical validation on modern LLMs
+  \end{enumerate}
+
+  \vspace{1em}
+  \textbf{Impact:}
+  \begin{itemize}
+    \item Challenges conventional understanding of LLM representations
+    \item Opens new avenues for interpretability and transparency
+    \item Raises important privacy and security considerations
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[plain]
+  \centering
+  \vspace{2cm}
+  \Huge Thank you!
+
+  \vspace{2em}
+  \normalsize
+  Questions?
+\end{frame}
+
+
+\end{document}

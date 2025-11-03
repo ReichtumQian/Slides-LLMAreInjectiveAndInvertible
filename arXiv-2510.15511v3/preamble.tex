@@ -1,0 +1,134 @@
+\usepackage{iclr2026_conference,times}
+
+% Optional math commands from https://github.com/goodfeli/dlbook_notation.
+\input{math_commands.tex}
+
+\definecolor{iccvblue}{rgb}{0.21,0.49,0.74}
+\usepackage[pagebackref,breaklinks,colorlinks,allcolors=iccvblue]{hyperref}
+\usepackage{url}
+\usepackage{algorithm,algpseudocode}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsthm}
+\usepackage{enumitem}
+\usepackage{wrapfig}
+\usepackage{overpic}
+\usepackage{amssymb}
+\usepackage{caption}
+\usepackage{xfrac}
+\captionsetup[algorithm]{font=small}  % smaller caption
+\algrenewcommand\algorithmicindent{0.8em} % less indent (algorithmicx)
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{corollary}{Corollary}[theorem]
+\newtheorem{lemma}{Lemma}[section]
+
+\newtheorem{proposition}{Proposition}[section]
+\newtheorem{assumption}{Assumption}[section]
+\newtheorem{definition}{Definition}[section]
+\newtheorem{remark}{Remark}
+
+\providecommand*{\theoremautorefname}{Theorem}
+\providecommand*{\corollaryautorefname}{Corollary}
+\providecommand*{\lemmaautorefname}{Lemma}
+
+\providecommand*{\propositionautorefname}{Proposition}
+\providecommand*{\assumptionautorefname}{Assumption}
+\providecommand*{\definitionautorefname}{Definition}
+\providecommand*{\remarkautorefname}{Remark}
+
+%\title{Learning Without Collisions, Almost Surely: On the Injectivity and Invertibility of Language Models}
+%\title{Learning Without Collisions: On the Injectivity and Invertibility of Language Models}
+\title{Language Models are Injective \\ and Hence Invertible}
+% Authors must not appear in the submitted version. They should be hidden
+% as long as the \iclrfinalcopy macro remains commented out below.
+% Non-anonymous submissions will be rejected without review.
+
+% \author{Giorgos Nikolaou\thanks{Equal Contribution} \; \& Tommaso Mencattini\footnotemark[1] \\
+% School of Computer and Communication Science \\
+% École polytechnique fédérale de Lausanne (EPFL) \\
+% Lausanne, Switzerland \\
+% \texttt{\{georgios,tommaso\}.\{last name\}@epfl.ch} 
+% \\
+% \And
+% Ji Q. Ren \& Yevgeny LeNet \\
+% Department of Computational Neuroscience \\
+% University of the Witwatersrand \\
+% Joburg, South Africa \\
+% \texttt{\{robot,net\}@wits.ac.za} \\
+% \AND
+% Coauthor \\
+% Affiliation \\
+% Address \\
+% \texttt{email}
+% }
+
+\author{
+\parbox{\linewidth}{\centering
+          Giorgos Nikolaou$^{\ddagger}$\thanks{Equal contribution; author order settled via Mario Kart.} \quad
+          Tommaso Mencattini$^{\dagger,\ddagger,*}$ \\[1ex]
+          Donato Crisostomi$^{\dagger}$ \quad 
+            Andrea Santilli$^{\dagger}$ \quad 
+           Yannis Panagakis$^{\S, \P}$ \quad
+           Emanuele Rodolà$^{\dagger}$ \quad \
+ } \\[3ex]
+{\parbox{\linewidth}{%
+        \centering
+        $^\dagger$Sapienza University of Rome \qquad 
+        $^\ddagger$EPFL \qquad  \
+        $^\S$University of Athens \qquad 
+        $^\P$Archimedes RC
+      }
+}
+}
+
+% The \author macro works with any number of authors. There are two commands
+% used to separate the names and addresses of multiple authors: \And and \AND.
+%
+% Using \And between authors leaves it to \LaTeX{} to determine where to break
+% the lines. Using \AND forces a linebreak at that point. So, if \LaTeX{}
+% puts 3 of 4 authors names on the first line, and the last on the second
+% line, try using \AND instead of \And before the third author name.
+
+\newcommand{\fix}{\marginpar{FIX}}
+\newcommand{\new}{\marginpar{NEW}}
+
+\iclrfinalcopy % Uncomment for camera-ready version, but NOT for submission.
+\usepackage{tcolorbox}
+
+\DeclareRobustCommand{\notationbox}[2][gray!10]{%
+	\begin{tcolorbox}[   %
+		left=0pt,
+		right=0pt,
+		top=0pt,
+		bottom=0pt,
+		colback=#1,
+		colframe=#1,
+		width=\dimexpr\textwidth\relax, 
+		enlarge left by=0mm,
+		boxsep=5pt,
+		arc=0pt,outer arc=0pt,
+		]
+		#2
+	\end{tcolorbox}
+}
+
+
+\usepackage{amsmath,amssymb,amsfonts,mathtools} % math symbols & tools
+\usepackage{amsthm}           % theorem environments
+\usepackage{graphicx}         % include graphics
+\usepackage{subcaption}       % subfigures
+\usepackage{wrapfig}          % wrap text around figures
+\usepackage{float}            % improved float placement
+\usepackage{booktabs}         % professional tables
+\usepackage{multirow}         % table multirow cells
+\usepackage{multicol}         % multi-column text
+\usepackage{tabularx}         % tables with flexible width
+\usepackage{colortbl}         % colored table cells
+\usepackage{arydshln}         % dashed lines in tables
+\usepackage{cleveref}
+
+\newcommand{\model}[1]{\texttt{#1}}
+
+

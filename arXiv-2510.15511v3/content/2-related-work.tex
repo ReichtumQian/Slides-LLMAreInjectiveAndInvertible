@@ -1,0 +1,24 @@
+\section{Related work}
+\label{sec:related}
+
+Our results connect to two active lines of research: theoretical analyses of Transformer architectures, and inverse problems in language modeling. We briefly review both to position our contributions.
+
+\paragraph{Analytical properties of Transformers.}
+Viewed as functions on $\mathbb{R}^d$, individual Transformer components are clearly non-injective: LayerNorm collapses along per-example statistics \citep{BaLayerNorm}, residual connections can cancel, and in attention-only stacks, rank decays doubly-exponentially with depth \citep{DongRankCollapse}. Likewise, on the output side, the {softmax bottleneck} constrains the distributions reachable by language models \citep{YangSoftmaxBottleneck}. From this algebraic perspective, Transformers seem inherently many-to-one, while in a generative sense, they can also behave one-to-many when different prompts lead to the same continuation.
+
+Our focus is different: we study the discrete-to-continuous map from \emph{prompts} $\mathrm{s} \in \mathcal V^{\le K}$ to \emph{hidden states} in $\mathbb{R}^d$. In this setting, analytic viewpoints on Transformer computation become powerful: treating each layer as a real-analytic map yields almost-sure guarantees that hold at finite width, depth, and training horizon. Recent work has adopted this angle for related properties: \citet{JiangSurjectivity} show that building blocks of modern architectures are \emph{almost always surjective}, while \citet{sutter2025nonlinearrepresentationdilemmacausal} prove that Transformers at random initialization are \emph{almost surely injective} with respect to the entire hidden-state matrix (and only at initialization).
+%\cite[App.~G]{sutter2025nonlinearrepresentationdilemmacausal}. 
+
+Differently, we prove injectivity with respect to the {\em parameters} and at the task-relevant \emph{last-token state}; crucially, we show that injectivity is not an initialization artifact but \emph{persists under training}.
+
+
+\paragraph{Inverse problems in language modeling.} 
+%
+%Inverse problems seek to recover an unknown input $x$ from observations $y$ produced by a forward process $y=f(x)$ \citep{InverseProblem}. Within this landscape, {language model inversion} targets the recovery of a model's input prompt from outputs or internal signals \citep{LLMInverse}. Prior work has mainly approached this indirectly: output-to-prompt methods infer prompts approximately from generated text \citep{out2out}, while encoder-focused approaches attempt to reconstruct prompts from hidden representations \citep{encoderInversion}. In both cases, reconstructions tend to be only \emph{semantically similar} to the original inputs rather than exact, and they do not address the harder problem of inverting hidden states in modern decoder-based LLMs.
+Inverse problems seek to recover an unknown input $x$ from observations $y$ produced by a forward process $y=f(x)$ \citep{InverseProblem}. Within this landscape, {language model inversion} asks whether one can reconstruct a model's input prompt from outputs or internal signals.
+
+Several approaches have explored this idea. Output-to-prompt methods infer prompts from generated continuations, yielding approximate reconstructions that are often semantically similar rather than exact \citep{out2out}. Recent work by Morris and coauthors shows that model \emph{outputs} are information-rich even in black-box settings: \citet{LLMInverse} train a separate inverter to map next-token probability vectors to text, and \citet{Morris25} extend this by taking sequences of logprobs, applying a linear compression to embedding dimension, and training an encoder-decoder inverter; this achieves higher exact-match rates but still without guarantees. Complementarily, \citet{encoderInversion} reconstruct text from {encoder} logits via a trained iterative inverter. These contributions highlight privacy risks when probabilities or embeddings are exposed, but they differ from our setting: they rely on trained inverters, remain approximate, and do not invert \emph{hidden states} of decoder-only LMs.
+
+A related line of work frames the task as {automated prompt optimization}, casting prompt design as discrete sequence optimization aligned with downstream performance \citep{OptPrompt1, OptPrompt2, OptPrompt3}; methods such as AutoPrompt \citep{AutoPrompt} and Hard Prompts Made Easy \citep{HardPrompt} use gradient signals to discover effective, but approximate, prompts.
+
+Unlike prior work, which yields approximate reconstructions from outputs, logits, or logprobs, our approach is training-free, efficient, and comes with \emph{provable} linear-time guarantees for \emph{exact} recovery from internal states.

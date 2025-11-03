@@ -1,0 +1,1859 @@
+\section{Preliminaries} \label{app:preliminaries}
+
+% This section fixes notation for sequences over a finite vocabulary, vectors and matrices, and the basic linear–algebraic operations we use throughout. We view the model as a map $f:\mathcal{V}^{\le K}\times\mathbb{R}^p\to\mathbb{R}^d$ (inputs are bounded-length sequences; outputs are token embeddings), and the central theme is \emph{real-analyticity}. We first recall the vector-space notion and its closure/composition properties (\autoref{def:real-analytic}, \autoref{prop:closure-real-analytic}, \autoref{prop:comp-real-analytic}), together with a zero-set result that underpins measure-zero arguments (\autoref{thm:zero-measure-roots}). We then lift these ideas to matrix spaces (\autoref{def:matrix-analytic}) via vectorization/matricization (\autoref{lem:equiv-analytic-column}) and show that matrix compositions preserve real-analyticity (\autoref{prop:matrix-composition}). To streamline later proofs, we catalogue real-analytic building blocks and constructions; polynomials (entrywise and noncommutative), exponential/logarithm, softmax, row normalization, matrix products, Hadamard scaling, and stacking (\autoref{prop:poly-ra}–\autoref{prop:stacking}, \autoref{prop:nc-matrix-poly}). Finally, we collect differential and topological tools (Fréchet derivatives and the Hessian, standard facts on $\mathbb{R}^p$, the inverse function theorem, and pushforwards/absolute continuity; \autoref{prop:frechet-hessian}, \autoref{prop:std-Rp}, \autoref{thm:inverse-function}) that we will invoke for local invertibility and absolute continuity statements. We include these preliminaries to keep the paper as self-contained as possible, so readers can follow the arguments without being experts or constantly referring to the literature; if you are already comfortable with these preliminaries, feel free to skim now and revisit specific statements as needed.
+
+This section fixes notation the notation used throughout the main paper and the appendix (\autoref{subsec:notation}), and it introduces \emph{real-analyticity} as the organizing theme (\autoref{subsec:real-analyticity}). We first review the vector-space notion and its basic closure/composition properties (\autoref{subsubsec:real-analytic-vector}), together with a zero-set principle used in measure-zero arguments. We then extend these ideas to maps between matrix spaces (\autoref{subsubsec:real-analytic-matrix}) via vectorization/matricization and note that analyticity is preserved under matrix compositions. To streamline later proofs, we summarize real-analytic building blocks commonly used in transformer layers--polynomials, exponential/logarithm, softmax, row normalization, matrix products, Hadamard scaling, and stacking (\autoref{subsubsec:real-analytic-components}). Finally, in \autoref{subsec:diff-mt-top}, we collect differential and topological tools--Fréchet derivatives and the Hessian, standard facts on $\mathbb{R}^p$, the inverse function theorem, and pushforwards/absolute continuity--which we use for local invertibility and absolute-continuity arguments. Readers already comfortable with these topics can skim now and return to specific subsections as needed.
+
+\subsection{Notation}\label{subsec:notation}
+
+For arbitrary $T \in \mathbb{N}$, we write $[T] = \{ 1, 2, \ldots, T \}$ to denote the set of positive integers up to $T$. Additionally, we denote the strictly positive real numbers as $\mathbb{R}^+ = (0, \infty)$ and the non-negative real numbers as $\mathbb{R}^+_0 = [0, \infty)$. Similarly, we let $\mathbb{N}_0 = \mathbb{N} \cup \{0\}$.
+
+Discrete sets are denoted by uppercase calligraphic letters $\mathcal{V}$, and a sequence of length $K$ is denoted by lowercase letters: $\mathrm{s} = \langle \mathrm{s}_1, \ldots, \mathrm{s}_K \rangle \in \mathcal{V}^K$. We write $|\mathrm{s}| = K$ to denote the length of the sequence. The set of non-empty sequences of length at most $K$ is denoted as $\mathcal{V}^{\leq K} = \bigcup_{k=1}^K \mathcal{V}^k$. Non-discrete sets are denoted by uppercase calligraphic bold-face letters $\boldsymbol{\mathcal{B}}$.
+
+\begin{remark}
+    We will often refer to a discrete set $\mathcal{V}$ as the \textit{vocabulary} and to an element $\mathrm{s} \in \mathcal{V}^{\leq K}$ as an \textit{input}, \textit{context}, or \textit{prompt}. 
+\end{remark}
+
+
+Matrices (vectors) are denoted by uppercase (lowercase) bold-face letters: $\mathbf{X} \in \mathbb{R}^{d_1 \times d_2}$ ($\mathbf{x} \in \mathbb{R}^d$). For vectors and matrices, we frequently use standard norms and common matrix operations. The Hadamard and Kronecker products are defined following \cite{kolda}:
+
+\vspace{-4pt}
+\begin{itemize}[leftmargin=*, itemsep=0.5em]
+    \item \textbf{$p$-norm:} For a vector $\mathbf{x} \in \mathbb{R}^d$, the $\ell_p$ norm is defined as
+    \[
+    \| \mathbf{x} \|_p = \left( \sum_{i=1}^d |\mathbf{x}_i|^p \right)^{\tfrac{1}{p}}.
+    \]
+
+    \item \textbf{Frobenius norm:} For a matrix $\mathbf{X} \in \mathbb{R}^{d_1 \times d_2}$, the Frobenius norm is defined as
+    \[
+    \| \mathbf{X} \|_{\mathrm{F}} = \sqrt{\operatorname{tr}(\mathbf{X} \mathbf{X}^\top)} = \sqrt{ \sum_{i=1}^{d_1} \sum_{j=1}^{d_2} \mathbf{X}_{ij}^2 }.
+    \]
+
+    \item \textbf{Hadamard product:} The Hadamard (element-wise) product is defined for vectors and matrices of the same shape:
+    \begin{align*}
+        (\mathbf{x} \odot \mathbf{y})_i &= \mathbf{x}_i \mathbf{y}_i, \quad &&\text{for all } i \in [d], \\
+        (\mathbf{X} \odot \mathbf{Y})_{ij} &= \mathbf{X}_{ij} \mathbf{Y}_{ij}, \quad &&\text{for all } i \in [d_1], \, j \in [d_2],
+    \end{align*}
+    where $\mathbf{x}, \mathbf{y} \in \mathbb{R}^d$ and $\mathbf{X}, \mathbf{Y} \in \mathbb{R}^{d_1 \times d_2}$.
+
+    \item \textbf{Kronecker product:} The Kronecker product of $\mathbf{X} \in \mathbb{R}^{d_1 \times d_2}$ and $\mathbf{Z} \in \mathbb{R}^{d_3 \times d_4}$ is denoted $\mathbf{X} \otimes \mathbf{Z}$ and defined blockwise as
+    \[
+    \mathbf{X} \otimes \mathbf{Z} =
+    \begin{bmatrix}
+        \mathbf{X}_{11} \mathbf{Z} & \cdots & \mathbf{X}_{1d_2} \mathbf{Z} \\
+        \vdots & \ddots & \vdots \\
+        \mathbf{X}_{d_1 1} \mathbf{Z} & \cdots & \mathbf{X}_{d_1 d_2} \mathbf{Z}
+    \end{bmatrix}
+    \in \mathbb{R}^{(d_1 d_3) \times (d_2 d_4)}.
+    \]
+\end{itemize}
+
+
+We denote the all-zeros matrix of size $m \times n$ as $\mathbf{0}_{m \times n}$, and the all-zeros vector of length $m$ as $\mathbf{0}_m$. Similarly, we write $\mathbf{1}_m$ for the all-ones vector of length $m$, and $\mathbf{I}_m$ (or $\mathbf{I}_{m \times m}$ when dimensions must be explicit) for the $m \times m$ identity matrix.
+
+
+Let $f : \mathcal{V}^{\leq K} \times \mathbb{R}^p \to \mathbb{R}^d$ be a function over a finite vocabulary $\mathcal{V}$ and $K \in \mathbb{N}$. We refer to $f$ as the \textit{model}, to its first argument as the \textit{input sequence}, and to its second argument as the \textit{parameters}.
+
+\begin{remark}
+    Throughout our analysis, we assume a finite set of possible input sequences, reflecting the practical limitations and design choices of modern LLMs, specifically the bounded context length. 
+\end{remark}
+
+\begin{remark}
+    We take the codomain of the model to be $\mathbb{R}^d$, corresponding to the space of token embeddings. This allows us to study how the final embedding (typically used to compute next-token probabilities) depends on both the input sequence and the model parameters.
+\end{remark}
+
+\subsection{Real-Analyticity}\label{subsec:real-analyticity}
+
+We now introduce the central notion for our analysis: real-analyticity.  
+In its standard form, real-analyticity is defined for functions 
+$f : \boldsymbol{\mathcal{U}} \to \mathbb{R}^n$, where $\boldsymbol{\mathcal{U}} \subseteq \mathbb{R}^m$ is an open set.  
+Since the transformer architecture is naturally expressed in terms of matrices, it will be convenient to extend this notion to maps of the form $f : \mathbb{R}^{m \times n} \to \mathbb{R}^{a \times b}$.
+
+\medskip
+\textbf{Multi-index notation. }  
+We use multi-index notation for both vectors and matrices.
+
+\smallskip
+\emph{Vector case.}  
+Let $\boldsymbol\alpha=(\alpha_1,\ldots,\alpha_m)^\top\in\mathbb{N}_0^m$ and $\mathbf{x},\mathbf{y}\in\mathbb{R}^m$. Define:
+$$
+|\boldsymbol\alpha| = \sum_{j=1}^m \alpha_j, \qquad
+\boldsymbol\alpha! = \prod_{j=1}^m \alpha_j!, \qquad
+(\mathbf{x}-\mathbf{y})^{\boldsymbol\alpha} = \prod_{j=1}^m (\mathbf{x}_j - \mathbf{y}_j)^{\alpha_j}.
+$$
+
+\smallskip
+\emph{Matrix case.}  
+Let $\mathbf{A} = (\alpha_{uv}) \in \mathbb{N}_0^{m \times n}$ and $\mathbf{X},\mathbf{Y} \in \mathbb{R}^{m \times n}$. Define:
+$$
+|\mathbf{A}| = \sum_{u=1}^m \sum_{v=1}^n \alpha_{uv}, \qquad
+\mathbf{A}! = \prod_{u=1}^m \prod_{v=1}^n \alpha_{uv}!, \qquad
+(\mathbf{X} - \mathbf{Y})^{\mathbf{A}} = \prod_{u=1}^m \prod_{v=1}^n (\mathbf{X}_{uv} - \mathbf{Y}_{uv})^{\alpha_{uv}}.
+$$
+
+
+Given an open set $\boldsymbol{\mathcal{U}}\subseteq\mathbb{R}^m$ and a map $f:\boldsymbol{\mathcal{U}}\to\mathbb{R}$, we write
+$$
+\mathbf{d}^{\boldsymbol\alpha} f(\mathbf{x}) \;:=\; 
+\frac{\partial^{|\boldsymbol\alpha|} f}{\partial \mathbf{x}_1^{\alpha_1}\cdots \partial \mathbf{x}_m^{\alpha_m}}(\mathbf{x})
+$$
+for the mixed partial derivative (when it exists). Unless stated otherwise, we assume $f\in C^\infty(\boldsymbol{\mathcal{U}})$, so $\mathbf{d}^{\boldsymbol\alpha} f$ exists and is continuous for all $\boldsymbol\alpha\in\mathbb{N}_0^m$; for vector-valued maps $f=(f_1,\ldots,f_n)$ the operator $\mathbf{d}^{\boldsymbol\alpha}$ acts componentwise. We also use the convention $\mathbf{d}^{\mathbf{0}}f=f$.
+
+
+\subsubsection{Real-Analytic Functions with Vector Inputs}\label{subsubsec:real-analytic-vector}
+
+\begin{definition}[Real-analytic functions, {\citealt[Definition 1.1.3]{Lewis2014HolomorphicRealAnalyticCalculus}}]\label{def:real-analytic}
+Let $\boldsymbol{\mathcal{U}} \subseteq \mathbb{R}^m$ be open. A function
+$f : \boldsymbol{\mathcal{U}} \to \mathbb{R}$ is
+\textbf{real-analytic} on $\boldsymbol{\mathcal{U}}$ if, for every $\mathbf{y} \in \boldsymbol{\mathcal{U}}$, there exist
+coefficients $\{c_{\boldsymbol\alpha} \in \mathbb{R} \}_{\boldsymbol\alpha \in \mathbb{N}_0^{m}}$
+and $r>0$ such that
+\begin{equation*}
+f(\mathbf{x}) = \sum_{\boldsymbol\alpha \in \mathbb{N}_0^{m}} c_{\boldsymbol\alpha}\,(\mathbf{x} - \mathbf{y})^{\boldsymbol\alpha}
+\end{equation*}
+for all $\mathbf{x} \in \boldsymbol{\mathcal{U}}$ with $\| \mathbf{x} - \mathbf{y} \|_2 < r$. The set of real-analytic functions on $\boldsymbol{\mathcal{U}}$
+is denoted by $C^\omega(\boldsymbol{\mathcal{U}})$.
+
+\smallskip
+A map $f : \boldsymbol{\mathcal{U}} \to \mathbb{R}^{n}$ is real-analytic on $\boldsymbol{\mathcal{U}}$ if each of its components
+$f_1,\dots,f_n: \boldsymbol{\mathcal{U}} \to \mathbb{R}$ is real-analytic.
+The set of such maps is denoted $C^\omega(\boldsymbol{\mathcal{U}} \, ; \, \mathbb{R}^n)$.
+\end{definition}
+
+\begin{remark}
+To establish real-analyticity of a vector-valued mapping (e.g., an MLP, attention mechanism, or LayerNorm), it suffices to prove real-analyticity of each scalar component.
+\end{remark}
+
+\begin{proposition}[Closure properties, {\citealt[Proposition 1.2.1]{Lewis2014HolomorphicRealAnalyticCalculus}}]\label{prop:closure-real-analytic}
+Let $f, g : \mathbb{R}^m \to \mathbb{R}$ be real-analytic maps. Then, the following hold:
+
+\vspace{-7px}
+\begin{enumerate}[itemsep=0em]
+    \item \textbf{Addition:} $f + g \in C^\omega(\mathbb{R}^m)$.
+    \item \textbf{Product:} $fg \in C^\omega(\mathbb{R}^m)$.
+    \item \textbf{Quotient:} If $g(\mathbf{x}) \neq 0$ for all $\mathbf{x} \in \mathbb{R}^m$, then $f/g \in C^\omega(\mathbb{R}^m)$.
+\end{enumerate}
+\end{proposition}
+
+\begin{proposition}[Composition, {\citealt[Proposition 1.2.2]{Lewis2014HolomorphicRealAnalyticCalculus}}]\label{prop:comp-real-analytic}
+Let $f : \mathbb{R}^m \to \mathbb{R}^n$ and $g : \mathbb{R}^n \to \mathbb{R}^k$ be real-analytic maps. Then, the composition $g \circ f : \mathbb{R}^m \to \mathbb{R}^k$ is real-analytic.
+\end{proposition}
+
+\begin{remark}
+For simplicity, we do not state the closure properties in their most general form, where $f$ and $g$ may be defined on different open subsets of $\mathbb{R}^m$.  
+This avoids additional notation involving intersections of domains.  
+Since every function of interest in our later analysis is defined on the whole space $\mathbb{R}^m$, this restriction entails no loss of generality.
+\end{remark}
+
+
+\begin{theorem}[Zero sets of nontrivial real-analytic maps {\citealt{mityagin2015zero}}]\label{thm:zero-measure-roots}
+Let $\boldsymbol{\mathcal{U}}\subseteq\mathbb{R}^{m}$ be connected and open, and let $f\in C^\omega(\boldsymbol{\mathcal{U}} \, ; \, \mathbb{R}^{n})$. 
+If $f\not\equiv \mathbf{0}_n$, then its zero set
+$$
+Z(f)\;:=\; f^{-1}(\{\mathbf{0}_n\}) \;=\; \{\mathbf{x} \in \boldsymbol{\mathcal{U}} :  f(\mathbf{x})=\mathbf{0}_n\}
+$$
+has Lebesgue measure zero in $\mathbb{R}^{m}$ (i.e. $\mathrm{Leb}_m\big(Z(f)\big) = 0$).
+Equivalently, if there exists $\mathbf{x} \in \boldsymbol{\mathcal{U}}$ with $f(\mathbf{x}) \neq \mathbf{0}_n$, then $\mathrm{Leb}_m\big(f^{-1}(\{\mathbf{0}_n\})\big) = 0$.
+\end{theorem}
+
+\begin{remark}
+The result in \cite{mityagin2015zero} is stated for scalar-valued maps $f : \boldsymbol{\mathcal{U}} \to \mathbb{R}$. The extension to vector-valued maps $f = (f_1, \ldots, f_n) : \boldsymbol{\mathcal{U}} \to \mathbb{R}^n$ is immediate: the zero set of $f$ is the intersection of the zero sets of its scalar components,
+$$
+Z(f) = \bigcap_{i=1}^n Z(f_i),
+$$
+and if $f \not\equiv \mathbf{0}_n$, then at least one component $f_j \not\equiv 0$, so $Z(f) \subseteq Z(f_j)$, which has measure zero by the scalar case.
+\end{remark}
+
+\subsubsection{Real-Analytic Functions with Matrix Inputs}\label{subsubsec:real-analytic-matrix}
+\begin{definition}[Real-analyticity on matrix spaces]\label{def:matrix-analytic} 
+
+Let $\boldsymbol{\mathcal{U}} \subseteq \mathbb{R}^{m\times n}$ be open. A function $f : \boldsymbol{\mathcal{U}} \to \mathbb{R}$ is \textbf{real-analytic} on $\boldsymbol{\mathcal{U}}$ if, for every $\mathbf{Y} \in \boldsymbol{\mathcal{U}}$, there exist coefficients $\{ c_\mathbf{A} \in \mathbb{R} \}_{\mathbf{A} \in \mathbb{N}_0^{m \times n}}$ and $r>0$ such that
+$$
+  f(\mathbf{X})=\sum_{\mathbf{A} \in \mathbb{N}_0^{m\times n}}
+  c_{\mathbf{A}} (\mathbf{X} - \mathbf{Y})^\mathbf{A}
+$$
+for all $\mathbf{X} \in \boldsymbol{\mathcal{U}}$ with  $\| \mathbf{X} - \mathbf{Y}\|_\mathrm{F} < r$.
+
+\smallskip
+A map $f : \boldsymbol{\mathcal{U}} \to \mathbb{R}^{a \times b}$ is real-analytic on $\boldsymbol{\mathcal{U}}$ if each of its components $f_{ij} : \boldsymbol{\mathcal{U}} \to \mathbb{R}$ is real-analytic. The set of such maps is denoted $C^\omega(\boldsymbol{\mathcal{U}} \, ; \, \mathbb{R}^{a \times b})$.
+\end{definition}
+
+
+\begin{remark}
+    In the special case where $n = b = 1$, the domain and codomain reduce to $\mathbb{R}^m$ and $\mathbb{R}^a$, respectively. Then \autoref{def:matrix-analytic} recovers \autoref{def:real-analytic}. Thus, \autoref{def:matrix-analytic} generalizes real-analyticity to functions between matrix spaces.
+\end{remark}
+
+
+
+\begin{definition}[Vectorization and matricization Operators]
+Let $\mathrm{vec}_{m, n} : \mathbb{R}^{m \times n} \to \mathbb{R}^{mn}$ denote the standard \textbf{vectorization operator}, which stacks the columns of a matrix into a single column vector \citep{henderson1981vec}. 
+
+We also define the corresponding \textbf{matricization operator} $\mathrm{mat}_{m,n} : \mathbb{R}^{mn} \to \mathbb{R}^{m \times n}$. As shown in \citealt{chacon2020higher}, the vectorization and matricization operators are mutual inverses:
+\begin{align}
+    \mathrm{mat}_{m,n}\big( \mathrm{vec} _{m,n}(\mathbf{X}) \big) 
+    &= \mathbf{X} 
+    \quad \forall\, \mathbf{X} \in \mathbb{R}^{m \times n} \\
+    \mathrm{vec}_{m,n}\big( \mathrm{mat}_{m,n} (\mathbf{x}) \big) &= \mathbf{x} \quad \;\forall \, \mathbf{x} \in \mathbb{R}^{mn}
+\end{align}
+
+Furthermore, if $\mathbf{x} \in \mathbb{R}^{mn}$ and $\mathbf{X} \in \mathbb{R}^{m \times n}$ are related by vectorization and matricization, i.e., $\mathbf{x} = \mathrm{vec}_{m,n}(\mathbf{X})$ and $\mathbf{X} = \mathrm{mat}_{m,n}(\mathbf{x})$, then their norms coincide:
+$$
+\| \mathbf{x} \|_2 = \| \mathbf{X} \|_\mathrm{F}.
+$$
+\end{definition}
+
+\begin{definition}[Vectorized Form of Function]
+    Let $\boldsymbol{\mathcal{U}} \subseteq \mathbb{R}^{m\times n}$ be open and $\tilde{\boldsymbol{\mathcal{U}}} = \mathrm{vec}_{m,n}(\boldsymbol{\mathcal{U}})$ (also open since $\mathrm{vec}$ is a linear homeomorphism). We denote the \textbf{vectorized form} of a function $f : \boldsymbol{\mathcal{U}} \to \mathbb{R}^{a \times b}$ as 
+    $$
+    \tilde{f} := \mathrm{vec}_{a,b}\circ f\circ \mathrm{mat}_{m,n} : \tilde{\boldsymbol{\mathcal{U}}} \to \mathbb{R}^{ab}.
+    $$
+
+    Equivalently, for all $\mathbf{X} \in \boldsymbol{\mathcal{U}}$:
+    \begin{equation}
+        f(\mathbf{X}) =  \mathrm{mat}_{a,b} \bigg( \tilde{f} \big( \mathrm{vec}_{m,n}(\mathbf{X}) \big) \bigg)
+    \end{equation}
+\end{definition}
+
+
+\begin{lemma}[Equivalence real-analyticity]\label{lem:equiv-analytic-column}
+Let $\boldsymbol{\mathcal{U}} \subseteq \mathbb{R}^{m\times n}$ be open, $\tilde{\boldsymbol{\mathcal{U}}} = \mathrm{vec}_{m,n}(\boldsymbol{\mathcal{U}})$, and let $f : \boldsymbol{\mathcal{U}} \to \mathbb{R}^{a\times b}$ with its vectorized form $\tilde{f} : \tilde{\boldsymbol{\mathcal{U}}} \to \mathbb{R}^{ab}$.
+
+Fix $\mathbf{Y} \in \boldsymbol{\mathcal{U}}$ and set $\mathbf{y} = \mathrm{vec}_{m,n}(\mathbf{Y}) \in \tilde{\boldsymbol{\mathcal{U}}}$.
+Then the following are equivalent:
+\vspace{-5px}
+\begin{enumerate}[itemsep=0em]
+  \item $f$ is real-analytic at $\mathbf{Y}$ (in the sense of \autoref{def:matrix-analytic}).
+  \item $\tilde{f}$ is real-analytic at $\mathbf{y}$ (in the sense of \autoref{def:real-analytic}).
+\end{enumerate}
+\end{lemma}
+
+\begin{proof}
+We begin by establishing the correspondence between matrix and vector indices in $\mathbb{R}^{k \times \ell}$ and $\mathbb{R}^{k\ell}$. For $s \in [k\ell]$, define:
+\begin{align*}
+    u(s) &:= 1 + (s - 1) \bmod k &&\text{(row index)} \\
+    v(s) &:= 1 + \left\lfloor \frac{s - 1}{k} \right\rfloor &&\text{(column index)}
+\end{align*}
+Then $(u(s), v(s)) \in [k] \times [\ell]$ gives the matrix coordinates corresponding to the $s$th entry of the vectorization. Conversely, for $(u, v) \in [k] \times [\ell]$, define:
+\[
+s(u,v) := u + (v - 1)k \in [k\ell]
+\]
+to recover the linear index.
+
+When clear from context, we omit arguments and simply write $u$, $v$, or $s$ for readability.
+
+\smallskip
+
+Let $\mathbf{X}, \mathbf{Y} \in \mathbb{R}^{m \times n}$, with vectorizations $\mathbf{x} = \mathrm{vec}_{m,n}(\mathbf{X})$ and $\mathbf{y} = \mathrm{vec}_{m,n}(\mathbf{Y})$. For a vector multi-index $\boldsymbol{\alpha} \in \mathbb{N}_0^{mn}$, define the corresponding matrix multi-index $\mathbf{A}_{\boldsymbol{\alpha}} := \mathrm{mat}_{m,n}(\boldsymbol{\alpha})$, so that:
+\begin{equation}\label{eq:ident2}
+  (\mathbf{x} - \mathbf{y})^{\boldsymbol{\alpha}} 
+  = \prod_{s=1}^{mn} (\mathbf{x}_s - \mathbf{y}_s)^{\boldsymbol{\alpha}_s} 
+  = \prod_{u=1}^m \prod_{v=1}^n (\mathbf{X}_{uv} - \mathbf{Y}_{uv})^{(\mathbf{A}_{\boldsymbol{\alpha}})_{uv}} 
+  = (\mathbf{X} - \mathbf{Y})^{\mathbf{A}_{\boldsymbol{\alpha}}}.
+\end{equation}
+
+Similarly, for a matrix multi-index $\mathbf{A} \in \mathbb{N}_0^{m \times n}$, define the corresponding vector multi-index $\boldsymbol{\alpha}_{\mathbf{A}} := \mathrm{vec}_{m,n}(\mathbf{A})$, giving:
+\begin{equation}\label{eq:ident1}
+  (\mathbf{X} - \mathbf{Y})^{\mathbf{A}} 
+  = \prod_{u=1}^m \prod_{v=1}^n (\mathbf{X}_{uv} - \mathbf{Y}_{uv})^{\mathbf{A}_{uv}} 
+  = \prod_{s=1}^{mn} (\mathbf{x}_s - \mathbf{y}_s)^{(\boldsymbol{\alpha}_{\mathbf{A}})_s} 
+  = (\mathbf{x} - \mathbf{y})^{\boldsymbol{\alpha}_{\mathbf{A}}}.
+\end{equation}
+
+Now let $\mathbf{M} \in \boldsymbol{\mathcal{U}}$, and let $\mathbf{m} = \mathrm{vec}_{m,n}(\mathbf{M}) \in \tilde{\boldsymbol{\mathcal{U}}}$. By definition of the vectorization,
+\[
+f_{uv}(\mathbf{M}) = \tilde{f}_s(\mathbf{m}), \quad \text{where } s = s(u,v).
+\]
+This coordinate-wise correspondence underlies the equivalence stated in the lemma.
+
+\medskip
+\textbf{($\Rightarrow$)} Assume $f$ is real-analytic at $\mathbf{Y}$.  
+Then by \autoref{def:matrix-analytic}, there exists $r > 0$ and, for each $(u,v)$, coefficients $\{ c^{(uv)}_{\mathbf{A}} \}_{\mathbf{A} \in \mathbb{N}_0^{m \times n}}$ such that:
+\begin{equation}\label{eq:f-matrix-series}
+  f_{uv}(\mathbf{X}) = \sum_{\mathbf{A} \in \mathbb{N}_0^{m \times n}} c^{(uv)}_{\mathbf{A}} (\mathbf{X} - \mathbf{Y})^{\mathbf{A}}, \qquad \forall\, \mathbf{X} \in \boldsymbol{\mathcal{U}} : \|\mathbf{X} - \mathbf{Y}\|_{\mathrm{F}} < r.
+\end{equation}
+
+Using \autoref{eq:ident1}, each component $\tilde{f}_s$ of $\tilde{f}$ can be expressed as:
+\[
+\tilde{f}_s(\mathbf{x}) 
+= \sum_{\boldsymbol{\alpha} \in \mathbb{N}_0^{mn}} \tilde{c}^{(s)}_{\boldsymbol{\alpha}} (\mathbf{x} - \mathbf{y})^{\boldsymbol{\alpha}}, 
+\quad \text{where } \tilde{c}^{(s)}_{\boldsymbol{\alpha}_{\mathbf{A}}} := c^{(u(s), v(s))}_{\mathbf{A}}.
+\]
+This series converges for all $\mathbf{x} \in \tilde{\boldsymbol{\mathcal{U}}}$ with $\|\mathbf{x} - \mathbf{y}\|_2 = \|\mathbf{X} - \mathbf{Y}\|_{\mathrm{F}} < r$. Hence, each scalar component of $\tilde{f}$ has a convergent power series at $\mathbf{y}$, proving that $\tilde{f}$ is real-analytic there.
+
+\medskip
+($\Leftarrow$) The reverse direction follows by symmetry: assume $\tilde{f}$ is real-analytic at $\mathbf{y}$, write the expansion at $\mathbf{y}$ using definition \autoref{def:real-analytic}, and repeat the argument using \autoref{eq:ident2} to construct component-wise expansions for $f_{uv}$ at $\mathbf{Y}$.
+\end{proof}
+
+\begin{remark}
+    Consider the function $f = \mathrm{vec}_{m,n} : \mathbb{R}^{m \times n} \to \mathbb{R}^{mn \times 1}$, which vectorizes an $m \times n$ matrix by stacking its columns. Its corresponding vectorized form is
+    \[
+        \tilde{f}(\mathbf{x}) = (\mathrm{vec}_{mn,1} \circ \mathrm{vec}_{m,n} \circ \mathrm{mat}_{m,n})(\mathbf{x}) = \mathrm{vec}_{mn,1}(\mathbf{x}) = \mathbf{x},
+    \]
+    since $\mathbf{x} \in \mathbb{R}^{mn}$ is already a column vector . This composition yields the identity map on $\mathbb{R}^{mn}$, which is clearly real analytic. Therefore, by \autoref{lem:equiv-analytic-column}, both $\mathrm{vec}_{m,n}$ is real analytic, and similarly, so is $\mathrm{mat}_{m,n}$. It is now evident that the composition of two matrix-valued real-analytic function is real-analytic, and we will prove it.
+\end{remark}
+
+
+\begin{proposition}[Composition on matrix spaces is real-analytic]\label{prop:matrix-composition}
+Suppose $f : \mathbb{R}^{m \times n} \to \mathbb{R}^{a\times b}$ and
+$g : \mathbb{R}^{a\times b} \to \mathbb{R}^{p\times q}$ are real-analytic
+(in the sense of \autoref{def:matrix-analytic}). Then
+$g\circ f : \mathbb{R}^{m \times n} \to \mathbb{R}^{p\times q}$ is real-analytic.
+\end{proposition}
+
+\begin{proof}
+Consider the vectorized forms
+\[
+\tilde{f} := \mathrm{vec}_{a,b} \circ f \circ \mathrm{mat}_{m,n} : \mathbb{R}^{m n} \to \mathbb{R}^{ab},
+\qquad
+\tilde{g} := \mathrm{vec}_{p,q} \circ g \circ \mathrm{mat}_{a,b}:\mathbb{R}^{a b} \to \mathbb{R}^{pq}.
+\]
+By \autoref{lem:equiv-analytic-column}, $f$ is real-analytic iff $\tilde f$ is, and $g$ is real-analytic
+iff $\tilde g$ is. Hence $\tilde f$ and $\tilde g$ are real-analytic maps between Euclidean spaces.
+
+The vectorized form of the composition is
+\[
+\widetilde{g\circ f}
+= \mathrm{vec}_{p,q}\circ (g\circ f)\circ \mathrm{mat}_{m,n}
+= \underbrace{\big(\mathrm{vec}_{p,q}\circ g\circ \mathrm{mat}_{a,b}\big)}_{\tilde g}
+  \circ
+  \underbrace{\big(\mathrm{vec}_{a,b}\circ f\circ \mathrm{mat}_{m,n}\big)}_{\tilde f}
+= \tilde g\circ \tilde f,
+\]
+where we inserted the identity $(\mathrm{mat}_{a,b}\circ \mathrm{vec}_{a,b})(\mathbf{X}) =\mathbf{X}$.
+By the vector-space composition property (\autoref{prop:comp-real-analytic}), $\tilde g\circ \tilde f$ is real-analytic on $\mathbb{R}^{m n}$.
+Applying \autoref{lem:equiv-analytic-column} once more, we get that $g \circ f$ is real-analytic.
+\end{proof}
+
+
+\subsubsection{Real Analyticity of Common Components}\label{subsubsec:real-analytic-components}
+
+We now collect several building blocks that will be used repeatedly. Throughout, all maps are defined on $\mathbb{R}^{m\times n}$, an open set, so \autoref{def:matrix-analytic} applies.
+
+\begin{proposition}[Polynomials are real-analytic]\label{prop:poly-ra}
+Let $p:\mathbb{R}^m\to\mathbb{R}$ be a polynomial in the coordinates of $\mathbf{x}\in\mathbb{R}^m$, i.e.,
+$p(\mathbf{x})=\sum_{|\boldsymbol\alpha|\leq d} a_{\boldsymbol\alpha}\,\mathbf{x}^{\boldsymbol\alpha}$
+for some $d\in\mathbb{N}_0$ and coefficients $a_{\boldsymbol\alpha}\in\mathbb{R}$. Then $p\in C^\omega(\mathbb{R}^m)$.
+\end{proposition}
+
+\begin{proof}
+Polynomials are $C^\infty$, and $\mathbf{d}^{\boldsymbol\alpha}p\equiv 0$ whenever $|\boldsymbol\alpha|>d$. Hence the Taylor expansion of $p$ at any $\mathbf{y}\in\mathbb{R}^m$ truncates:
+$$
+p(\mathbf{x}) \;=\; \sum_{|\boldsymbol\alpha|\leq d}\frac{\mathbf{d}^{\boldsymbol\alpha}p(\mathbf{y})}{\boldsymbol\alpha!}\,(\mathbf{x}-\mathbf{y})^{\boldsymbol\alpha},
+$$
+which holds for all $\mathbf{x}\in\mathbb{R}^m$ (radius $r=+\infty$). Therefore $p$ is real-analytic.
+\end{proof}
+
+\begin{proposition}[The exponential is real-analytic]\label{prop:exp-ra}
+The map $\exp:\mathbb{R} \to (0, \infty)$ is real-analytic on $\mathbb{R}$.
+\end{proposition}
+
+\begin{proof}
+Define $E(x):=\sum_{k=0}^{\infty}\frac{x^{k}}{k!}$. By the ratio test this power series has infinite radius of convergence, hence converges absolutely for all $x\in\mathbb{R}$. Standard results on power series imply that $E$ is $C^\infty$ on $\mathbb{R}$ and can be differentiated termwise within its radius of convergence; in particular, for every $j\in\mathbb{N}_0$,
+\[
+E^{(j)}(x)
+=\sum_{k=j}^{\infty}\frac{k(k-1)\cdots(k-j+1)}{k!}\,x^{k-j}
+=\sum_{r=0}^{\infty}\frac{x^{r}}{r!}
+=E(x).
+\]
+Fix $y\in\mathbb{R}$. Taylor's theorem for power series then yields
+\[
+E(x)
+=\sum_{j=0}^{\infty}\frac{E^{(j)}(y)}{j!}(x-y)^j
+=E(y)\sum_{j=0}^{\infty}\frac{(x-y)^j}{j!},
+\]
+which is a convergent power series in $x-y$ with infinite radius of convergence. Hence $E$ is real-analytic at every $y\in\mathbb{R}$. As $E$ is the usual exponential function defined by its power series, $\exp$ is real-analytic on $\mathbb{R}$.
+\end{proof}
+
+\begin{proposition}[The logarithm is real-analytic]\label{prop:log-real-analytic}
+The map $\log : (0, \infty) \to \mathbb{R}$ is real-analytic on $(0, \infty)$.
+\end{proposition}
+
+\begin{proof} For brevity, we present only a proof sketch;
+
+The exponential map $\exp:\mathbb{R}\to(0,\infty)$ is real-analytic with $\exp'(y)\neq 0$ for all $y$.
+By the real-analytic inverse function theorem (see \citealt[Thm.~2.3.1]{krantz2002primer}),
+its local inverse $\log$ is real-analytic on $(0,\infty)$.
+\end{proof}
+
+
+
+\begin{proposition}[Softmax is real-analytic]\label{prop:softmax-ra}
+The map $\mathrm{softmax}:\mathbb{R}^m\to\mathbb{R}^m$ with components
+$$
+\mathrm{softmax}_i(\mathbf{x}) \;=\; \frac{e^{\mathbf{x}_i}}{\sum_{j=1}^m e^{\mathbf{x}_j}}, \qquad i=1,\dots,m,
+$$
+is real-analytic on $\mathbb{R}^m$.
+\end{proposition}
+
+\begin{proof}
+Fix $i$. The numerator $\mathbf{x}\mapsto e^{\mathbf{x}_i}$ is the composition of the coordinate projection $\pi_i(\mathbf{x}) = \mathbf{x}_i$ (a linear, hence real-analytic, map) with $\exp$; by \autoref{prop:exp-ra} and the composition rule in \autoref{prop:closure-real-analytic}, it is real-analytic. The denominator
+$$
+H(\mathbf{x}) = \sum_{j=1}^m e^{\mathbf{x}_j}
+$$
+is a finite sum of real-analytic functions, hence real-analytic. Moreover, $H(\mathbf{x})>0$ for all $\mathbf{x}\in\mathbb{R}^m$ because $e^{x_j}>0$. Therefore, by the quotient rule in \autoref{prop:closure-real-analytic}, the map
+$$
+\mathbf{x}\mapsto \frac{e^{\mathbf{x}_i}}{H(\mathbf{x})}
+$$
+is real-analytic on $\mathbb{R}^m$. Since this holds for each $i=1,\dots,m$, the vector-valued map $\mathrm{softmax}$ is real-analytic.
+\end{proof}
+
+\begin{proposition}[Row normalization is real-analytic on positive row-sum domain]\label{prop:rn-analytic}
+Let
+$$
+\boldsymbol{\mathcal{D}}_T := \big\{ \mathbf{Y} \in \mathbb{R}^{T\times T} : \mathbf{Y} \mathbf{1}_T \in (0, \infty)^T \big\}.
+$$
+Define $\mathrm{RN}(\mathbf{Y}) = \mathrm{diag}(\mathbf{Y}\mathbf{1}_T)^{-1}\mathbf{Y}$ on $\boldsymbol{\mathcal{D}}_T$.
+Then $\mathrm{RN} : \boldsymbol{\mathcal{D}}_T \to \mathbb{R}^{T \times T}$ is real-analytic (in the sense of \autoref{def:matrix-analytic}).
+\end{proposition}
+
+\begin{proof}
+The map $\mathbf{Y}\mapsto \mathbf{s}:=\mathbf{Y}\mathbf{1}_T$ is linear, hence real-analytic.
+On $(0,\infty)^T$, the entrywise reciprocal $\mathbf{s}\mapsto \mathbf{s}^{\odot(-1)}$ is real-analytic (componentwise $t\mapsto 1/t$).
+The map $\mathbf{s}\mapsto \mathrm{diag}(\mathbf{s})$ is linear. Matrix multiplication $(\mathbf{A},\mathbf{Y})\mapsto \mathbf{A}\mathbf{Y}$ is real-analytic (\autoref{prop:matmul}). Composing these gives $\mathrm{RN}(\mathbf{Y})=\mathrm{diag}(\mathbf{Y}\mathbf{1}_T)^{-1}\mathbf{Y}$ real-analytic on the open set $\boldsymbol{\mathcal{D}}_T$.
+\end{proof}
+
+
+\begin{proposition}[Entrywise matrix polynomials are real-analytic]\label{prop:matrix-poly-ra}
+Fix $m,n \in \mathbb{N}$. For coefficients $\{ c_{\mathbf{A}} \in \mathbb{R} \}_{\mathbf{A} \in \mathbb{N}_0^{m \times n}}$
+and some $d \in \mathbb{N}_0$, define the function $p : \mathbb{R}^{m \times n} \to \mathbb{R}$ by:
+\begin{equation} \label{eq:mat-to-r-poly}
+    p(\mathbf{X}) = \sum_{|\mathbf{A}| \le d} c_{\mathbf{A}}\, \mathbf{X}^{\mathbf{A}},
+\end{equation}
+where $\mathbf{X}^{\mathbf{A}} = \prod_{u=1}^m \prod_{v=1}^n \mathbf{X}_{uv}^{\mathbf{A}_{uv}}$ as defined in the multi-index notation above. Then $p$ is real-analytic on $\mathbb{R}^{m \times n}$ (in the sense of \autoref{def:matrix-analytic}).
+
+Moreover, if $f : \mathbb{R}^{m \times n} \to \mathbb{R}^{a \times b}$ has component functions $f_{ij}$ of the form \autoref{eq:mat-to-r-poly}, then $f$ is real-analytic.
+\end{proposition}
+
+\begin{proof}
+Consider the vectorized form
+$\tilde{p} := p \circ \mathrm{mat}_{m,n} : \mathbb{R}^{mn} \to \mathbb{R}$.  
+Using the coordinate identification from \eqref{eq:ident1}-\eqref{eq:ident2}, each monomial satisfies
+\[
+\big(\mathrm{mat}_{m,n}(\mathbf{x})\big)^{\mathbf{A}} = \mathbf{x}^{\boldsymbol\alpha_{\mathbf{A}}},
+\]
+where $\boldsymbol\alpha_{\mathbf{A}} = \mathrm{vec}_{m,n}(\mathbf{A})$. Hence:
+\[
+\tilde{p}(\mathbf{x}) = \sum_{|\mathbf{A}| \le d} c_{\mathbf{A}}\, \mathbf{x}^{\boldsymbol\alpha_{\mathbf{A}}},
+\]
+which is a standard multivariate polynomial in $\mathbf{x} \in \mathbb{R}^{mn}$. By \autoref{prop:poly-ra}, such functions are real-analytic on all of $\mathbb{R}^{mn}$, so $\tilde{p} \in C^\omega(\mathbb{R}^{mn})$.  
+By \autoref{lem:equiv-analytic-column}, this implies $p$ is real-analytic on $\mathbb{R}^{m \times n}$.
+
+For the second claim, observe that if each $f_{ij}$ is a scalar polynomial of the form \autoref{eq:mat-to-r-poly}, then each $f_{ij}$ is real-analytic by the argument above. Hence, by \autoref{def:matrix-analytic}, $f$ is real analytic.
+\end{proof}
+
+
+\begin{proposition}[Matrix product of real-analytic factors]\label{prop:matmul}
+Let the functions $f : \mathbb{R}^{m\times n} \to \mathbb{R}^{p\times r}$ and $g : \mathbb{R}^{m\times n}\to\mathbb{R}^{r\times q}$ be real-analytic. Then, $h : \mathbb{R}^{m \times n} \to \mathbb{R}^{p\times q}$ defined as $h(\mathbf{X}) = f(\mathbf{X}) \, g(\mathbf{X})$, is real-analytic on $\mathbb{R}^{m\times n}$.
+\end{proposition}
+
+\begin{proof}
+For each $(i,j)\in[p]\times[q]$, it holds that $h_{ij}(\mathbf{X}) = \sum_{k=1}^r f_{ik}(\mathbf{X}) \, g_{kj}(\mathbf{X})$.
+
+Each factor $f_{ik}$ and $g_{kj}$ is a real-analytic scalar map by assumption; their product is real-analytic by \autoref{prop:closure-real-analytic}, and a finite sum of real-analytic functions is real-analytic. Thus every $h_{ij}$ is real-analytic, hence $h$ is real-analytic.
+\end{proof}
+
+\begin{proposition}[Hadamard (element-wise) scaling]\label{prop:hadamard}
+Let $\mathbf{A} \in \mathbb{R}^{m\times n}$ be a fixed matrix. Then, the map $f : \mathbb{R}^{m\times n} \to \mathbb{R}^{m\times n}$ defined as $f(X) = \mathbf{A} \odot \mathbf{X}$ is real-analytic on $\mathbb{R}^{m\times n}$.
+\end{proposition}
+
+\begin{proof}
+Componentwise, $(\mathbf{A} \odot \mathbf{X})_{ij} = \mathbf{A}_{ij} \, \mathbf{X}_{ij}$ is a product of a constant and a coordinate function, hence a polynomial (degree $\leq 1$) and thus real-analytic.
+\end{proof}
+
+\begin{proposition}[Concatenation/stacking of real-analytic blocks]\label{prop:stacking}
+Let $f_\ell : \mathbb{R}^{m\times n} \to \mathbb{R}^{p\times q_\ell}$ be real-analytic for $\ell \in [L]$. The horizontal concatenation operation $g:\mathbb{R}^{m\times n}\to\mathbb{R}^{p\times (q_1+\cdots+q_L)}$, defined as:
+\[
+g(\mathbf{X})=\big[\,f_1(\mathbf{X}) \;\; f_2(\mathbf{X}) \;\; \cdots \;\; f_L(\mathbf{X})\,\big]
+\]
+is real-analytic. Likewise, if $f_\ell : \mathbb{R}^{m\times n}\to\mathbb{R}^{p_\ell\times q}$ are real-analytic, then the vertical stacking operation $h : \mathbb{R}^{m\times n} \to \mathbb{R}^{(p_1+\cdots+p_L)\times q}$, defined as:
+$$
+h(\mathbf{X}) =\big[\,f_1(\mathbf{X})^\top \;\; f_2(\mathbf{X})^\top \;\; \cdots \;\; f_L(\mathbf{X})^\top \,\big]^\top
+$$
+is real-analytic.
+\end{proposition}
+
+\begin{proof}
+Each scalar component of $g$ (respectively $h$) is exactly one scalar component of some $f_\ell$, hence real-analytic. Therefore $g$ and $h$ are real-analytic by definition \autoref{def:matrix-analytic}.
+\end{proof}
+
+
+
+\begin{proposition}[Noncommutative matrix polynomials are real-analytic]\label{prop:nc-matrix-poly}
+Let $n,p,q\in\mathbb{N}$, let $\mathbf{X}\in\mathbb{R}^{n\times n}$, and fix coefficient matrices
+$\mathbf{A}_k\in\mathbb{R}^{p\times n}$ and $\mathbf{B}_k\in\mathbb{R}^{n\times q}$ for $k=0,\ldots,d$.
+Define
+\[
+f(\mathbf{X})
+\;:=\;
+\sum_{k=0}^{d}\mathbf{A}_k\,\mathbf{X}^{k}\,\mathbf{B}_k
+\;\in\; \mathbb{R}^{p\times q},
+\qquad
+\mathbf{X}^0:=\mathbf{I}_n,\;\; \mathbf{X}^{k+1}:=\mathbf{X}^{k}\mathbf{X}.
+\]
+Then $f$ is real analytic in the sense of \autoref{def:matrix-analytic}.
+\end{proposition}
+
+\begin{proof}
+The identity map $\mathbf{X}\mapsto\mathbf{X}$ is linear, hence a degree-$1$ entrywise polynomial; by \autoref{prop:matrix-poly-ra} it is real-analytic.  
+Assume $\mathbf{X}\mapsto\mathbf{X}^k$ is real-analytic. With $f(\mathbf{X})=\mathbf{X}^k$ and $g(\mathbf{X})=\mathbf{X}$, \autoref{prop:matmul} yields $\mathbf{X}^{k+1}=f(\mathbf{X})g(\mathbf{X})$ real-analytic; by induction, all powers $\mathbf{X}\mapsto\mathbf{X}^k$ are real-analytic.
+
+For each $k$, left/right multiplication by fixed matrices preserves real-analyticity via \autoref{prop:matmul}: since the constant maps $\mathbf{X}\mapsto\mathbf{A}_k$ and $\mathbf{X}\mapsto\mathbf{B}_k$ are real-analytic (components are constant polynomials), the composition
+$\mathbf{X}\mapsto \mathbf{A}_k\,\mathbf{X}^k\,\mathbf{B}_k$ is real-analytic.  
+Finally, $f$ is a finite sum of real-analytic maps, hence real-analytic by closure under addition (apply \autoref{prop:closure-real-analytic} componentwise).
+\end{proof}
+
+\begin{remark}
+We highlight several standard constructions that yield real-analytic maps, omitting proofs for brevity:
+\begin{itemize}[leftmargin=*, itemsep=0em]
+    \item \textbf{Affine and bilinear maps.} Functions of the form $\mathbf{X} \mapsto \mathbf{A}\mathbf{X}\mathbf{B} + \mathbf{C}$ are real-analytic, as they are obtained via matrix multiplication and addition of constant matrices (\autoref{prop:matmul}, \autoref{prop:closure-real-analytic}).
+
+    \item \textbf{Algebraic expressions in $\mathbf{X}$.} Any expression constructed from $\mathbf{X}$ using finitely many additions and matrix multiplications with fixed coefficient matrices, e.g.
+    $\mathbf{A}_0 + \mathbf{A}_1\mathbf{X}\mathbf{B}_1 + \mathbf{A}_2\mathbf{X}\mathbf{B}_2\mathbf{X}\mathbf{C}_2$-
+    defines a real-analytic map. This follows from repeated application of \autoref{prop:matmul} and closure under addition.
+
+    \item \textbf{Scalar polynomial invariants.} Coordinate functions $\mathbf{X}_{ij}$, the trace $\mathrm{tr}(\mathbf{X})$, all principal and non-principal minors, and the determinant $\det(\mathbf{X})$ are scalar polynomials in the entries of $\mathbf{X}$, and hence real-analytic by \autoref{prop:matrix-poly-ra}.
+\end{itemize}
+\end{remark}
+
+\subsection{Differential, Measure-Theoretic, and Topological Tools}\label{subsec:diff-mt-top}
+
+This subsection collects the minimal calculus, measure, and topology we will use later. In finite dimensions, Fr\'echet derivatives let us speak uniformly about Jacobians and Hessians; basic Euclidean topology lets us control neighborhoods and compactness; the inverse function theorem gives local invertibility; and pushforwards/absolute continuity formalize how distributions transform under measurable maps.
+
+\begin{definition}[Fr\'echet derivative {\cite[\S7.2-\S7.3]{Luenberger_1997}}]
+    Let $\boldsymbol{\mathcal{U}} \subseteq \mathbb{R}^{m}$ open, and consider a function
+    $f : \boldsymbol{\mathcal{U}} \to \mathbb{R}^n$. We say that $f$ is \emph{Fr\'echet differentiable} at $\mathbf{x} \in \boldsymbol{\mathcal{U}}$ if there exists a bounded linear map
+    $\mathbf{A} : \mathbb{R}^m \to \mathbb{R}^n$ such that
+    $$
+    \lim_{\| \mathbf{h} \|_2 \to 0} \frac{\| f(\mathbf{x} + \mathbf{h}) - f(\mathbf{x}) - \mathbf{A} \mathbf{h} \|_2}{\| \mathbf{h} \|_2} = 0.
+    $$
+    The unique operator $\mathbf{A}$ is denoted by $Df(\mathbf{x})$ and called the (Fr\'echet) derivative of $f$ at $\mathbf{x}$.
+\end{definition}
+    
+    
+\begin{definition}[Second Fr\'echet derivative {\cite[Ch.~18]{Magnus_Neudecker_2019}}]
+    Let $\boldsymbol{\mathcal{U}} \subseteq \mathbb{R}^m$ open, and consider a function $f : \boldsymbol{\mathcal{U}} \to \mathbb{R}^n$. Suppose $f$ is Fr\'echet differentiable at $\mathbf{x}$. The \emph{second Fr\'echet derivative} of $f$ at $\mathbf{x}$ is the bounded bilinear map
+    $D^2 f(\mathbf{x}) : \mathbb{R}^m \times \mathbb{R}^m \to \mathbb{R}^n$ defined as:
+    \begin{equation*}
+    \label{eq:second-frechet-derivative-as-derivative-of-Df}
+    D^2 f(\mathbf{x})[\mathbf{h},\mathbf{k}]
+    := \lim_{t\to 0}\frac{Df(\mathbf{x}+t\mathbf{h})[\mathbf{k}]-Df(\mathbf{x})[\mathbf{k}]}{t}.
+    \end{equation*}
+\end{definition}
+    
+\begin{proposition}[Connection to the Hessian]\label{prop:frechet-hessian}
+    If $f : \boldsymbol{\mathcal{U}} \to \mathbb{R}$ is $C^2$, then $D^2 f(\mathbf{x})$ is symmetric \cite[Thm.~5.1]{arora2021alternative} and can represented by the Hessian matrix $\nabla^2 f(\mathbf{x})$:
+    $$
+    D^2 f(\mathbf{x})[\mathbf{h}, \mathbf{k}] \;=\; \mathbf{h}^\top \big( \nabla^2 f(\mathbf{x}) \big) \, \mathbf{k},
+    $$
+    as noted in \citealt[Ch.~18]{Magnus_Neudecker_2019}.
+\end{proposition}
+
+\begin{definition}[Closure of a set in $\mathbb{R}^p$]
+Let $\boldsymbol{\mathcal{U}} \subseteq \mathbb{R}^p$. The closure of $\boldsymbol{\mathcal{U}}$, denoted $\overline{\boldsymbol{\mathcal{U}}}$, is the smallest closed subset of $\mathbb{R}^p$ containing $\boldsymbol{\mathcal{U}}$.
+\end{definition}
+
+\begin{definition}[Euclidean balls in $\mathbb{R}^p$]\label{def:balls}
+Fix $p \in \mathbb{N}$ and equip $\mathbb{R}^p$ with the Euclidean norm $\| \cdot \|_2$.
+For $\mathbf{x} \in \mathbb{R}^p$ and $r > 0$ we define:
+\begin{align*}
+B(\mathbf{x},r) &:=
+\{ \, \mathbf{y} \in \mathbb{R}^p : \| \mathbf{y} - \mathbf{x} \|_2 < r\, \} \\
+\overline{B}(\mathbf{x}, r) &:=
+\{ \, \mathbf{y} \in \mathbb{R}^p : \| \mathbf{y} - \mathbf{x} \|_2 \leq r\, \}
+\end{align*}
+In $\mathbb{R}^p$ with the Euclidean topology one has $\overline{B}(\mathbf{x}, r) = \overline{B(\mathbf{x}, r)}$, i.e. the closed ball equals the topological closure of the open ball.
+\end{definition}
+
+\begin{definition}[Second-countable subspace of $\mathbb{R}^p$ {{\cite[§30]{MunkresTopology}}}]
+Let $\boldsymbol{\mathcal{X}} \subseteq \mathbb{R}^p$ be equipped with the subspace topology
+$\tau_{\boldsymbol{\mathcal{X}}} := \{ \boldsymbol{\mathcal{U}} \cap \boldsymbol{\mathcal{X}} : \boldsymbol{\mathcal{U}}\text{ open in } \mathbb{R}^p \}$.
+We say $\boldsymbol{\mathcal{X}}$ is second-countable if there exists a countable family
+$\mathcal{F} \subseteq \tau_X$ such that every $\boldsymbol{\mathcal{O}} \in \tau_{\boldsymbol{\mathcal{X}}}$ is a union of members of $\mathcal{F}$.
+Equivalently, the countable family
+$$
+\mathcal{F}_{\mathbb{Q}} \; := \; \big\{\, B(\mathbf{x},r) \cap \boldsymbol{\mathcal{X}} : \mathbf{x} \in \mathbb{Q}^p, r\in\mathbb{Q}_{>0} \, \big\},
+$$
+is a basis for $\tau_{\boldsymbol{\mathcal{X}}}$.
+\end{definition}
+
+
+\begin{proposition}[Standard facts for $\mathbb{R}^p$]\label{prop:std-Rp}
+Fix $p\in\mathbb{N}$. The following hold:
+
+\vspace{-5px}
+\begin{enumerate}[itemsep=0em]
+    \item \textbf{Hausdorff} \cite[Prop.~18]{AitkenMetricSpacesNotes}\textbf{:} $\mathbb{R}^p$ with its Euclidean metric is Hausdorff.
+    \item \textbf{Heine-Borel} \cite[Thm.~27.3]{MunkresTopology}\textbf{:} A subset of $\mathbb{R}^p$ is compact iff it is closed and bounded; in particular, each closed Euclidean ball $\overline{B}(x,r)$ is compact.
+    \item \textbf{Second countability} \cite[\S13 and Thm.~30.2]{MunkresTopology} \textbf{:} $\mathbb{R}$ has a countable base (intervals with rational endpoints); hence $\mathbb{R}^p$, being a finite product of second-countable spaces, is second-countable. Moreover, subspaces of second-countable spaces are second-countable.
+    \item \textbf{Lindelöf consequence}\cite[Thm.~30.3(a)]{MunkresTopology}\textbf{:} Every second-countable space is Lindelöf; consequently, every open cover of any subspace of $\mathbb{R}^p$ admits a countable subcover.
+    \item \textbf{Local compactness of $\mathbb{R}^p$}\cite[Thm.~29.2]{MunkresTopology}\textbf{:} For any $\mathbf{x} \in \mathbb{R}^p$ and open neighborhood $\boldsymbol{\mathcal{W}} \ni \mathbf{x}$, there exists $\varepsilon > 0$ with $\overline{B}(\mathbf{x}, \varepsilon) \subseteq \boldsymbol{\mathcal{W}}$, and $\overline{B}(\mathbf{x}, \varepsilon)$ is compact by Heine-Borel; hence $\mathbb{R}^p$ is locally compact. Furthermore, in a Hausdorff space, local compactness is equivalent to shrinking neighborhoods with compact closures: for every neighborhood $\boldsymbol{\mathcal{W}} \ni \mathbf{x}$ there exists an open $\boldsymbol{\mathcal{V}}$ with $\mathbf{x} \in \boldsymbol{\mathcal{V}} \subseteq \overline{\boldsymbol{\mathcal{V}}} \subseteq \boldsymbol{\mathcal{W}}$ and $\overline{\boldsymbol{\mathcal{V}}}$ compact.
+\end{enumerate}
+\end{proposition}
+
+\begin{definition}[$C^k$ diffeomorphism {\citealt[Ch.~5]{Spivak1971-nl}}]\label{def:diffeomorphism}
+Let $U,V\subseteq\mathbb{R}^p$ be open sets and let $k\in\mathbb{N}\cup\{\infty\}$.
+A map $f:U\to V$ is a \textbf{$C^k$ diffeomorphism} if:
+
+\vspace{-5px}
+\begin{enumerate}[itemsep=0em]
+    \item $f$ is bijective;
+    \item $f$ is $C^k$ (all partial derivatives up to order $k$ exist and are continuous);
+    \item the inverse map $f^{-1}:V\to U$ is $C^k$.
+\end{enumerate}
+When $k=1$ we simply say \emph{diffeomorphism}.
+Equivalently, a $C^k$ diffeomorphism is a bijective $C^k$ map whose inverse is also $C^k$.
+\end{definition}
+
+\begin{theorem}[Inverse Function Theorem {\citealt[Thm.~9.24]{RudinPM}}]\label{thm:inverse-function}
+Let $\boldsymbol{\mathcal{U}} \subset \mathbb{R}^p$ be open and $f : \boldsymbol{\mathcal{U}} \to \mathbb{R}^p$ be $C^1$. 
+Suppose $\mathbf{a} \in \boldsymbol{\mathcal{U}}$ satisfies $\det Df(\mathbf{a}) \neq 0$. Then there exist open sets
+$\boldsymbol{\mathcal{U}}_0 \subset \boldsymbol{\mathcal{U}}$ with $\mathbf{a} \in \boldsymbol{\mathcal{U}}_0$ and $\boldsymbol{\mathcal{V}}_0 \subset \mathbb{R}^p$ with $f(\mathbf{a}) \in \boldsymbol{\mathcal{V}}_0$ such that
+$$
+f \big|_{\boldsymbol{\mathcal{U}}_0} : \boldsymbol{\mathcal{U}}_0 \to \boldsymbol{\mathcal{V}}_0
+$$
+is a $C^1$-diffeomorphism. Moreover, the inverse $f^{-1} : \boldsymbol{\mathcal{V}}_0 \to \boldsymbol{\mathcal{U}}_0$ is $C^1$ and
+$$
+D\big( f^{-1} \big)(f(\mathbf{x})) \; = \; \big(D f(\mathbf{x})\big)^{-1} \qquad \forall \, \mathbf{x} \in \boldsymbol{\mathcal{U}}_0.
+$$
+\end{theorem}
+
+\begin{remark}
+In \autoref{thm:inverse-function} we assume $f :\boldsymbol{\mathcal{U}} \subseteq \mathbb{R}^p \to \mathbb{R}^p$, so the Jacobian $Df(\mathbf{a})$ is a $p \times p$ (square) matrix. In this setting,
+$$
+\det Df(\mathbf{a}) \neq 0 \quad \Longleftrightarrow \quad Df(\mathbf{a}) \; \text{is invertible},
+$$
+and this is exactly the hypothesis that yields a local $C^1$ inverse.
+\end{remark}
+
+\begin{definition}[Pushforward and absolute continuity {\cite[\S3.2]{Folland1999-ad}}]
+Consider a Borel-measurable map $T : \mathbb{R}^p \to \mathbb{R}^p$ and let $\mu$ be a Borel measure on $\mathbb{R}^p$.
+The pushforward measure $T_\#\mu$ is the Borel measure on $\mathbb{R}^p$ defined by
+$$
+T_\#\mu(\boldsymbol{\mathcal{U}}) \; := \; \mu \left( T^{-1}(\boldsymbol{\mathcal{U}}) \right),\qquad \boldsymbol{\mathcal{U}} \in \mathcal{B}(\mathbb{R}^p).
+$$
+If $\nu$ is another Borel measure on $\mathbb{R}^p$, we say $T_\#\mu$ is absolutely continuous with respect to $\nu$,
+and write $T_\#\mu \ll \nu$, if for every Borel set $\boldsymbol{\mathcal{U}} \in \mathcal{B}(\mathbb{R}^p)$:
+$$
+\nu(\boldsymbol{\mathcal{U}}) = 0 \Longrightarrow T_\#\mu(\boldsymbol{\mathcal{U}}) = 0.
+$$
+In particular, for Lebesgue measure $\mathrm{Leb}_p$, to prove $T_\#\mu \ll \mathrm{Leb}_p$ for every $\mu \ll \mathrm{Leb}_p$, 
+it suffices to verify that
+$$
+\mathrm{Leb}_p(\boldsymbol{\mathcal{U}}) = 0 \ \Longrightarrow\ \mathrm{Leb}_p \big( T^{-1}(\boldsymbol{\mathcal{U}}) \big)=0
+\quad\text{for all Borel } \boldsymbol{\mathcal{U}}\subseteq\mathbb{R}^p.
+$$
+\end{definition}
+
+\section{Transformer Language Model}\label{sec:app:trans}
+
+% For the sequel, in order to be explicit, clear and most importantly convincingly correct, it is necessary to properly define mathematically the architecture that we are considering. Following \cite{sutter2025nonlinearrepresentationdilemmacausal}, we outline the architecture of a decoder-only LLM.
+
+This appendix section gives a concise, shape-accurate specification of the decoder-only Transformer we analyze. We include it both to keep the paper self-contained and because the measure-zero arguments later hinge on architecture-dependent witnesses and exact dimension bookkeeping. We begin with token and positional embeddings (\autoref{def:emb-plus-pos}), define self-attention and its causal variants (\autoref{def:self-attn}, \autoref{def:self-attn-causal-masked}, \autoref{def:self-attn-causal-proj}), assemble multi-head attention, layer normalization, and an MLP into a pre-LN residual block (\autoref{def:mhsa}, \autoref{def:layer-norm}, \autoref{def:mlp}, \autoref{def:transformer-block}), stack $L$ such blocks to obtain the model (\autoref{def:transformer}), and conclude with the unembedding+softmax head (\autoref{def:unemb-layer}), isolating the last-token representation used in downstream proofs (\autoref{eq:last-token-repr}).
+
+
+\vspace{5px}
+
+\begin{definition}[Token Embedding Layer]\label{def:emb-layer}
+Let $\mathcal{V}$ be a vocabulary, and let $d \in \mathbb{N}$ be the embedding dimension. For any input sequence $\mathrm{s} = \langle\mathrm{s}_1, \ldots, \mathrm{s}_T\rangle \in \mathcal{V}^{\leq K}$, the Token Embedding Layer is the function defined as:
+\begin{equation}
+\mathrm{E}(\mathrm{s}) = \left( \mathbf{E}_{\mathrm{s}_1}, \ldots, \mathbf{E}_{\mathrm{s}_T} \right)^\top \in \mathbb{R}^{T \times d},
+\end{equation}
+where $\mathbf{E} \in \mathbb{R}^{|\mathcal{V}| \times d}$ is a trainable embedding matrix indexed by elements of $\mathcal{V}$, and $\mathbf{E}_{\mathrm{s}_i} \in \mathbb{R}^d$ denotes the embedding vector for token $\mathrm{s}_i$.
+
+This mapping is applied element-wise and is independent of the sequence length $T$.
+\end{definition}
+
+\begin{definition}[Positional Embedding Layer]\label{def:pos-emb-layer}
+Let $\mathcal{V}$ be a vocabulary, and let $d\in\mathbb{N}$ be the embedding dimension. 
+For any input sequence $\mathrm{s} = \langle \mathrm{s}_1, \ldots, \mathrm{s}_T\rangle \in \mathcal{V}^{\le K}$ with $T = |\mathrm{s}|$, the (learned absolute) Positional Embedding Layer is the function defined as:
+\begin{equation}
+\mathrm{PE}(\mathrm{s}) \;=\; \left( \mathbf{P}_{1}, \ldots, \mathbf{P}_{T} \right)^\top \in \mathbb{R}^{T \times d},
+\end{equation}
+where $\mathbf{P}\in\mathbb{R}^{K\times d}$ is a trainable matrix indexed by positions $i\in[K]$, and $\mathbf{P}_i\in\mathbb{R}^d$ denotes the embedding vector for position $i$. This mapping depends only on positions (not on token identities) and returns the first $T$ rows of $\mathbf{P}$.
+\end{definition}
+
+\begin{definition}[Embedding Layer]\label{def:emb-plus-pos}
+Let $\mathcal{V}$ be a vocabulary, $K\in\mathbb{N}$ a context bound, and $d\in\mathbb{N}$ the embedding width.
+For any input sequence $\mathrm{s}=\langle \mathrm{s}_1,\ldots,\mathrm{s}_T\rangle \in \mathcal{V}^{\le K}$ with $T=|\mathrm{s}|$, define the embedding layer as the sum of the token and positional embeddings:
+\begin{equation}
+\mathrm{Emb}(\mathrm{s}) := \mathrm{E}(\mathrm{s}) + \mathrm{PE}(\mathrm{s}) = \big( \,\mathbf{E}_{\mathrm{s}_1} + \mathbf{P}_{1}, \;  \ldots, \; \mathbf{E}_{\mathrm{s}_T} + \mathbf{P}_{T} \, \big)^\top \in \mathbb{R}^{T\times d},
+\end{equation}
+where $\mathbf{E}\in\mathbb{R}^{|\mathcal{V}|\times d}$ is the trainable token-embedding matrix and
+$\mathbf{P}\in\mathbb{R}^{K\times d}$ is the trainable positional-embedding matrix.
+\end{definition}
+
+\smallskip
+\begin{definition}[Multi-Layer Perceptron]\label{def:mlp}
+    A Multi-Layer Perceptron (MLP) with $M$ layers is a function $\mathrm{mlp}_M : \mathbb{R}^{d_0} \to \mathbb{R}^{d_M}$, defined recursively as:
+    \begin{align}
+        \mathbf{h}^{(1)} &= \mathbf{W}^{(1)} \mathbf{x} + \mathbf{b}^{(1)}\\
+        \mathbf{h}^{(m)} &= \mathbf{W}^{(m)} \, \sigma\big(\mathbf{h}^{(m-1)}\big) + \mathbf{b}^{(m)}, \; m \geq 2 \\
+        \mathrm{mlp}_M(\mathbf{x}) &= \mathbf{h}^{(M)}
+    \end{align}
+    where $\mathbf{x} \in \mathbb{R}^{d_0}$ is the input, $\{ \mathbf{W}^{(m)} \in \mathbb{R}^{d_m \times d_{m-1}}  \}_{m=1}^M$ and $\{ \mathbf{b}^{(m)} \in \mathbb{R}^{d_m} \}_{m=1}^M$ are trainable parameters and $\sigma$ is an activation function.
+\end{definition}
+
+\begin{definition}[Self-Attention]\label{def:self-attn} 
+A Self-Attention module is a function $\boldsymbol\eta : \mathbb{R}^{T \times d_\mathrm{in}} \to \mathbb{R}^{T \times d_\eta}$, defined as:
+\begin{align}
+    \boldsymbol\eta(\mathbf{X} \, ;  \mathbf{Q}, \mathbf{K}, \mathbf{V})  = \mathrm{softmax}\left( \frac{\left(\mathbf{X} \mathbf{Q}\right) \left(\mathbf{X} \mathbf{K}\right)^\top}{\sqrt{d_\eta}} \right)\mathbf{X} \mathbf{V},
+\end{align}
+where $\mathbf{X} \in \mathbb{R}^{T \times d_\mathrm{in}}$ is the input, $\mathbf{Q}, \mathbf{K}, \mathbf{V} \in \mathbb{R}^{d_\mathrm{in} \times d_\eta}$ are trainable parameters (query, key, and value matrices), $\mathrm{softmax}$ is applied row-wise, $d_\eta$ is the attention dimension (typically $d_\eta < d_\mathrm{in}$), and $T$ is the sequence length.
+\end{definition}
+
+
+\begin{definition}[Causal Self-Attention, masked form]\label{def:self-attn-causal-masked}
+Define the ``causal mask" $\mathbf{M} \in \overline{\mathbb{R}}^{T \times T}$ as:
+$$
+\mathbf{M}_{ij} =
+\begin{cases}
+0, &  j\le i, \\
+-\infty,& j> i
+\end{cases}
+$$
+Then, a Causal Self-Attention module is a function $\tilde{\boldsymbol{\eta}} : \mathbb{R}^{T \times d_\mathrm{in}} \to \mathbb{R}^{T \times d_\eta}$, defined as:
+\begin{align}
+    \tilde{\boldsymbol{\eta}}(\mathbf{X} \, ;  \mathbf{Q}, \mathbf{K}, \mathbf{V})  = \mathrm{softmax}\left( \frac{\left(\mathbf{X} \mathbf{Q}\right) \left(\mathbf{X} \mathbf{K}\right)^\top}{\sqrt{d_\eta}} + \mathbf{M} \right)\mathbf{X} \mathbf{V},
+\end{align}
+where $\mathbf{X} \in \mathbb{R}^{T \times d_\mathrm{in}}$ is the input, $\mathbf{Q}, \mathbf{K}, \mathbf{V} \in \mathbb{R}^{d_\mathrm{in} \times d_\eta}$ are trainable parameters (query, key, and value matrices), $\mathrm{softmax}$ is applied row-wise, $d_\eta$ is the attention dimension (typically $d_\eta < d_\mathrm{in}$), and $T$ is the sequence length.
+\end{definition}
+
+
+\begin{definition}[Causal Self-Attention, projection form]\label{def:self-attn-causal-proj}
+Define the unit lower-triangular matrix $\mathbf{L} \in \mathbb{R}^{T \times T}$ as $\mathbf{L}_{ij} = \mathbb{I}_{\{ j \leq i \}}$ and consider the row normalization operation $\mathrm{RN} : \boldsymbol{\mathcal{D}}_T \to \mathbb{R}^{T \times T}$ of \autoref{prop:rn-analytic}. Then, a Causal Self-Attention module is a function $\tilde{\boldsymbol{\eta}} : \mathbb{R}^{T \times d_\mathrm{in}} \to \mathbb{R}^{T \times d_\eta}$, defined as:
+\begin{align}
+    \tilde{\boldsymbol{\eta}}(\mathbf{X} \, ;  \mathbf{Q}, \mathbf{K}, \mathbf{V})  = \mathrm{RN}\left( \mathbf{L} \odot \exp{\left( \frac{\left(\mathbf{X} \mathbf{Q}\right) \left(\mathbf{X} \mathbf{K}\right)^\top}{\sqrt{d_\eta}} \right)} \right)\mathbf{X} \mathbf{V},
+\end{align}
+where $\mathbf{X} \in \mathbb{R}^{T \times d_\mathrm{in}}$ is the input, $\mathbf{Q}, \mathbf{K}, \mathbf{V} \in \mathbb{R}^{d_\mathrm{in} \times d_\eta}$ are trainable parameters (query, key, and value matrices), $\mathrm{RN}$ is applied row-wise, $d_\eta$ is the attention dimension (typically $d_\eta < d_\mathrm{in}$), and $T$ is the sequence length.
+\end{definition}
+
+\begin{remark}\label{rem:row-sum-positive}
+
+Consider $\mathbf{Z} = \frac{1}{\sqrt{d_\eta}} \left(\mathbf{X} \mathbf{Q}\right) \left(\mathbf{X} \mathbf{K}\right)^\top$. Since $\mathbf{L}_{ii} = 1$ for all $i \in [T]$, we have that $\big[ \mathbf{L} \odot \exp{\mathbf{Z}} \big]_{ii} = e^{\mathbf{Z}_{ii}}> 0$, hence the row sum
+$\sum_{j \leq i} e^{\mathbf{Z}_{ij}} \geq e^{\mathbf{Z}_{ii}} > 0$ and $\mathrm{RN}$ is well-defined.
+\end{remark}
+
+
+
+
+\begin{definition}[Multi-Head Self-Attention]\label{def:mhsa} 
+A Multi-Head Self-Attention module with $H$ heads is a function $\mathrm{attn}_H : \mathbb{R}^{T \times d_\mathrm{in}} \to \mathbb{R}^{T \times d_\mathrm{out}}$, defined using the Self-Attention map from \autoref{def:self-attn} or \autoref{def:self-attn-causal-proj} with different parameter sets per head:
+\begin{align}
+    \boldsymbol\eta_h(\mathbf{X}) &= \boldsymbol\eta(\mathbf{X} \, ; \mathbf{Q}^{(h)}, \mathbf{K}^{(h)}, \mathbf{V}^{(h)}), 
+    \quad h \in [H], \\
+    \mathrm{attn}_H(\mathbf{X}) &= \big[\boldsymbol\eta_1(\mathbf{X}), \ldots, \boldsymbol\eta_H(\mathbf{X})\big]\mathbf{W}^O,
+\end{align}
+where $\{\mathbf{Q}^{(h)}, \mathbf{K}^{(h)}, \mathbf{V}^{(h)} \in \mathbb{R}^{d_\mathrm{in} \times d_\eta}\}_{h=1}^H$ are the head-specific parameters and $\mathbf{W}^O \in \mathbb{R}^{H d_\eta \times d_\mathrm{out}}$ is the output projection matrix.
+\end{definition}
+
+\begin{definition}[Layer Normalization]\label{def:layer-norm}
+
+Layer Normalization is a function $\mathrm{LN} : \mathbb{R}^{d} \to \mathbb{R}^{d}$, defined as:
+\begin{equation}
+    \mathrm{LN}(\mathbf{x}) = \boldsymbol\gamma \odot \frac{\mathbf{x} - \mu_\mathbf{x} \mathbf{1}_d}{\sqrt{\sigma_\mathbf{x}^2 + \varepsilon}} + \boldsymbol\beta,
+\end{equation}
+where $\mathbf{x} \in \mathbb{R}^{d}$ is the input, $\mu_\mathbf{x} = \frac{1}{d}\sum_{i=1}^d \mathbf{x}_i$ and $\sigma_\mathbf{x}^2 = \frac{1}{d}\sum_{i=1}^d (\mathbf{x}_i - \mu_\mathbf{x})^2$ are the mean and variance of $\mathbf{x}$, vectors $\boldsymbol\beta, \boldsymbol\gamma \in \mathbb{R}^d$ are learnable parameters, and $\varepsilon \in \mathbb{R}^+$ is a small constant that ensures we don't divide by zero.
+
+\end{definition}
+
+\begin{definition}[Unembedding Layer]\label{def:unemb-layer}
+Let $\mathcal{V}$ be a vocabulary and $d\in\mathbb{N}$ and $\mathbf{U}\in\mathbb{R}^{|\mathcal{V}|\times d}$ be a trainable projection matrix. Define the unembedding map $\mathrm{UnEmb}:\mathbb{R}^{d}\to\mathbb{R}^{|\mathcal{V}|}$ by
+\[
+\mathrm{UnEmb}(\mathbf{h})
+\;:=\;
+\mathrm{softmax}\big(\,\mathbf{U}\,\mathrm{LN}(\mathbf{h})\,\big),
+\qquad \mathbf{h}\in\mathbb{R}^{d}.
+\]
+
+\end{definition}
+
+
+
+\begin{definition}[Transformer Block]\label{def:transformer-block}
+    A Transformer Block consists of a composition of a Multi-Head Self-Attention layer with $H$ heads (\autoref{def:mhsa}) and an MLP with $M$ layers (\autoref{def:mlp}), each preceded by layer normalization (\autoref{def:layer-norm}) and wrapped with residual connections. Given an input $\mathbf{X} \in \mathbb{R}^{T \times d}$, the output $\mathrm{TB}(\mathbf{X}) \in \mathbb{R}^{T \times d}$ is computed as:
+    \begin{align}
+        \mathbf{H} &= \mathbf{X} + \mathrm{attn}_H(\overline{\mathbf{X}}) \label{eq:trans-res-att}\\
+        \mathrm{TB}(\mathbf{X}) &= \mathbf{H} + \mathrm{mlp}_M(\overline{\mathbf{H}}), \label{eq:trans-res-mlp}
+    \end{align}
+    where $\overline{\mathbf{X}}, \overline{\mathbf{H}} \in \mathbb{R}^{T \times d}$ are the results of applying layer normalization row-wise to $\mathbf{X}$ and $\mathbf{H}$, respectively, each with its own set of learnable parameters and $\mathrm{mlp}_M$ is applied row-wise. All sub-layer parameters are dimensioned appropriately.
+\end{definition}
+
+\begin{definition}[Transformer]\label{def:transformer}
+Fix $L\in\mathbb{N}$. For each $\ell\in[L]$, let
+$\mathrm{TB}^{(\ell)}:\mathbb{R}^{T\times d}\to\mathbb{R}^{T\times d}$ denote a Transformer Block (\autoref{def:transformer-block}) with its own parameters.
+Define the module
+$$
+\mathrm{Tr}_T \;:=\; \mathrm{TB}^{(L)}\circ \cdots \circ \mathrm{TB}^{(1)}.
+$$
+Each $\mathrm{TB}^{(\ell)}$ maps $\mathbb{R}^{T\times d}\to\mathbb{R}^{T\times d}$, so the residual additions in \autoref{def:transformer-block} are dimensionally valid at every depth.
+\end{definition}
+
+
+\begin{definition}[Transformer Language Model]\label{def:tlm}  
+Let $\mathcal{V}$ denote a finite vocabulary and $K \in \mathbb{N}$ a fixed context length.  
+A \emph{Transformer Language Model} with $L$ layers is the composition of an embedding layer (\autoref{def:emb-plus-pos}), a Transformer with $L$ blocks (\autoref{def:transformer}), and an Unembedding Layer (\autoref{def:unemb-layer}).  
+
+Formally, it is a parameterized function  
+$$
+f : \mathcal{V}^{\leq K} \times \mathbb{R}^p \;\to\; \Delta^{|\mathcal{V}| - 1}
+$$
+defined as follows. Without loss of generality, consider $\boldsymbol{\theta} = (\boldsymbol{\theta}_1 \in \mathbb{R}^{p_1}, \boldsymbol{\theta}_2 \in \mathbb{R}^{p_2}, \boldsymbol{\theta}_3 \in \mathbb{R}^{p_3}) \in \mathbb{R}^p$, which collects all the model parameters.
+
+For an input sequence $\mathrm{s} = \langle \mathrm{s}_1, \ldots, \mathrm{s}_T \rangle$ with $T \leq K$:  
+\begin{align}
+    \mathbf{H}(\mathrm{s} \, ; \, \boldsymbol{\theta}) &= \mathrm{Emb}(\mathrm{s} \, ; \,\boldsymbol{\theta}_1) \quad &&\text{(embedding)} \\  
+    \mathbf{r}(\mathrm{s} \, ; \, \boldsymbol{\theta}) &= \bigg( \mathrm{Tr}_{|\mathrm{s}|} \Big(\mathbf{H}(\mathrm{s} \, ; \, \boldsymbol{\theta}) \, ; \, \boldsymbol{\theta}_2 \Big) \bigg)_{|\mathrm{s}|}&&\text{(last-token representation)} \label{eq:last-token-repr}\\
+    f(\mathbf{s} \, ; \, \boldsymbol{\theta} ) &= \mathrm{UnEmb}\Big(\mathbf{r}(\mathrm{s} \, ; \, \boldsymbol{\theta}) \, ; \, \boldsymbol{\theta}_3\Big) &&\text{(next-token prediction)}
+\end{align}   
+
+Then, the probability of the next-token being $\mathcal{V}_i$ is given by:
+\begin{equation} \label{eq:next-token-prediction}
+    \Pr \, [ \;s_{T+1} = \mathcal{V}_i \mid \mathrm{s} \;]  
+    \;=\; \big(f(\mathrm{s} \, ; \, \boldsymbol{\theta} ) \big)_i,  
+    \quad \forall i \in [|\mathcal{V}|].  
+\end{equation}  
+
+\end{definition}  
+
+
+\begin{proposition}[Equivalence of masked and projection causal softmax]\label{prop:masked-vs-projection}
+For any logits $\mathbf{Z} \in \mathbb{R}^{T \times T}$, let $\mathbf{M}$ and $\mathbf{L}$ be as in
+Definitions~\ref{def:self-attn-causal-masked}–\ref{def:self-attn-causal-proj}. Then, row-wise,
+$$
+\mathrm{softmax}(\mathbf{Z} + \mathbf{M}) \; = \;\mathrm{RN} \big(\mathbf{L} \odot \exp{\mathbf{Z}}\big).
+$$
+Consequently, the two definitions of the Causal Self-Attention are identical.
+\end{proposition}
+
+\begin{proof}
+Fix a row $i$. By the mask:
+$$
+\big[ \mathrm{softmax}(\mathbf{Z} + \mathbf{M}) \big]_{ij} =
+\begin{cases}
+\dfrac{e^{\mathbf{Z}_{ij}}}{\sum_{k \leq i} e^{\mathbf{Z}_{ik}}}, & j \leq i,\\[8pt]
+0, & j > i,
+\end{cases}
+$$
+interpreting $-\infty$ via a limit. On the other hand, it holds that:
+$$
+[\mathbf{L} \odot \exp{\mathbf{Z}}]_{ij} = \mathbb{I}_{j \leq i} \, e^{\mathbf{Z}_{ij}}.
+$$ 
+Therefore, $\mathbf{L} \odot \exp{\mathbf{Z}}$ keeps exactly the entries with $j \leq i$.
+Then, for each row, row normalization divides the kept entries by the same positive sum $\sum_{k \leq i} e^{\mathbf{Z}_{ik}}$ and leaves the others at $0$, yielding the same row as above. This holds for every row $i$, proving the identity.
+\end{proof}
+
+
+\begin{proposition}[Embedding layer is real-analytic in the parameters]\label{prop:emb-ra-params}
+Fix a sequence $\mathrm{s}=\langle \mathrm{s}_1,\ldots,\mathrm{s}_T\rangle\in\mathcal{V}^{\le K}$ with $T=|\mathrm{s}|$.
+Consider the map
+\[
+(\mathbf{E},\mathbf{P})\;\longmapsto\;\mathrm{Emb}(\mathrm{s})
+\;=\;\mathrm{E}(\mathrm{s})+\mathrm{PE}(\mathrm{s})
+\;\in\;\mathbb{R}^{T\times d},
+\qquad
+\mathbf{E}\in\mathbb{R}^{|\mathcal{V}|\times d},\;\mathbf{P}\in\mathbb{R}^{K\times d}.
+\]
+Then this map is real-analytic on $\mathbb{R}^{|\mathcal{V}|\times d}\times\mathbb{R}^{K\times d}$ (in the sense of \autoref{def:matrix-analytic}).
+\end{proposition}
+
+\begin{proof}
+Let $S_\mathrm{s}\in\{0,1\}^{T\times|\mathcal{V}|}$ select rows $\{\mathrm{s}_i\}_{i=1}^T$, and $R_T\in\{0,1\}^{T\times K}$ select the first $T$ rows. Then
+\[
+\mathrm{E}(\mathrm{s})=S_\mathrm{s}\mathbf{E},\qquad
+\mathrm{PE}(\mathrm{s})=R_T\mathbf{P},\qquad
+\mathrm{Emb}(\mathrm{s})=S_\mathrm{s}\mathbf{E}+R_T\mathbf{P}.
+\]
+Each map $(\mathbf{E},\mathbf{P})\mapsto S_\mathrm{s}\mathbf{E}$ and $(\mathbf{E},\mathbf{P})\mapsto R_T\mathbf{P}$ is a matrix product of a \emph{constant} matrix with the variable (\emph{constant maps are real-analytic} as degree-$0$ polynomials by \autoref{prop:matrix-poly-ra}; the product is real-analytic by \autoref{prop:matmul}). Their sum is real-analytic by closure under addition (\autoref{prop:closure-real-analytic}). Hence $(\mathbf{E},\mathbf{P})\mapsto \mathrm{Emb}(\mathrm{s})$ is real-analytic.
+\end{proof}
+
+\begin{proposition}[Joint real-analyticity of core modules and stacks]\label{prop:modules-ra}
+Assume the pointwise activation $\sigma:\mathbb{R}\to\mathbb{R}$ used in the MLP is real-analytic (e.g., $\tanh$, $\mathrm{GELU}$).
+Fix $T\in[K]$. For notational convenience define the parameter tuples
+\[
+\Theta_{\mathrm{attn}}
+:=\Big(\{\mathbf{Q}^{(h)},\mathbf{K}^{(h)},\mathbf{V}^{(h)}\}_{h=1}^H,\;\mathbf{W}^O\Big),\quad
+\Theta_{\mathrm{LN}}^{(1)}:=(\boldsymbol\gamma^{(1)},\boldsymbol\beta^{(1)}),\quad
+\Theta_{\mathrm{LN}}^{(2)}:=(\boldsymbol\gamma^{(2)},\boldsymbol\beta^{(2)}),
+\]
+\[
+\Theta_{\mathrm{mlp}}
+:=\big(\{\mathbf{W}^{(m)},\mathbf{b}^{(m)}\}_{m=1}^M\big),\qquad
+\Theta_{\mathrm{TB}}
+:=\big(\Theta_{\mathrm{attn}},\Theta_{\mathrm{LN}}^{(1)},\Theta_{\mathrm{LN}}^{(2)},\Theta_{\mathrm{mlp}}\big),
+\quad
+\Theta_{\mathrm{Tr},T}
+:=\big(\Theta_{\mathrm{TB}}^{(1)},\ldots,\Theta_{\mathrm{TB}}^{(L)}\big).
+\]
+Then the following maps are jointly real-analytic in their inputs and parameters:
+
+\vspace{-2pt}
+\begin{enumerate}[leftmargin=*,itemsep=0.35em]
+\item \textbf{MLP.}
+$(\mathbf{x},\Theta_{\mathrm{mlp}})\mapsto \mathrm{mlp}_M(\mathbf{x})$ is real-analytic: each affine layer
+$(\mathbf{W},\mathbf{b},\mathbf{x})\mapsto \mathbf{W}\mathbf{x}+\mathbf{b}$ is a matrix product plus addition (\autoref{prop:matmul} and \autoref{prop:closure-real-analytic}); the activation $\sigma$ is real-analytic by assumption, and composition preserves real-analyticity (\autoref{prop:comp-real-analytic}). Iteration over $M$ layers is repeated composition (\autoref{prop:comp-real-analytic}).
+
+\item \textbf{Layer Normalization.}
+$(\mathbf{x},\boldsymbol\gamma,\boldsymbol\beta)\mapsto \mathrm{LN}(\mathbf{x})
+=\boldsymbol\gamma\odot\frac{\mathbf{x}-\mu_{\mathbf{x}}}{\sqrt{\sigma^2_{\mathbf{x}}+\varepsilon}}+\boldsymbol\beta$ is real-analytic:
+$\mu_{\mathbf{x}}$ and $\sigma^2_{\mathbf{x}}$ are (entrywise) polynomials in $\mathbf{x}$ (\autoref{prop:matrix-poly-ra});
+$g(\mathbf{x})=\sigma^2_{\mathbf{x}}+\varepsilon$ satisfies $g(\mathbf{x})>0$ (definition of $\varepsilon>0$), and the scalar map $h(t)=t^{-1/2}$ is real-analytic on $(0,\infty)$ (classical binomial series). Thus $h\circ g$ is real-analytic (\autoref{prop:comp-real-analytic}); division by $g^{1/2}$ is a quotient by a nonvanishing real-analytic function (\autoref{prop:closure-real-analytic}); Hadamard scaling by $\boldsymbol\gamma$ and addition of $\boldsymbol\beta$ preserve real-analyticity (\autoref{prop:hadamard} and \autoref{prop:closure-real-analytic}). Row-wise application is handled by stacking (\autoref{prop:stacking}) and the vectorization equivalence (\autoref{lem:equiv-analytic-column}).
+
+\item \textbf{Unembedding.}
+$(\mathbf{h},\mathbf{U},\boldsymbol\gamma,\boldsymbol\beta)\mapsto
+\mathrm{softmax}\big(\mathbf{U}\,\mathrm{LN}(\mathbf{h})\big)$ is real-analytic:
+$\mathrm{LN}$ is real-analytic by (2); multiplication by $\mathbf{U}$ is real-analytic (\autoref{prop:matmul});
+$\mathrm{softmax}$ is real-analytic (\autoref{prop:softmax-ra}); the overall map is a composition (\autoref{prop:comp-real-analytic}) and stacking across coordinates (\autoref{prop:stacking}).
+
+\item \textbf{Self-Attention (vanilla or causal) and Multi-Head.}
+Let $\mathbf{Z} = \frac{1}{\sqrt{d_\eta}} \left(\mathbf{X} \mathbf{Q}\right) \left(\mathbf{X} \mathbf{K}\right)^\top$.
+
+\emph{(a) Vanilla SA:} 
+$(\mathbf{X},\mathbf{Q},\mathbf{K},\mathbf{V}) \mapsto \mathrm{softmax}( \mathbf{Z} ) \mathbf{X} \mathbf{V}$ is real-analytic by:
+matrix products (\autoref{prop:matmul}), scaling, row-wise softmax (\autoref{prop:softmax-ra} with stacking, \autoref{prop:stacking}, and \autoref{lem:equiv-analytic-column}), and a final matrix product.
+
+\emph{(b) Causal SA (projection form):}
+With $\mathbf{L}$ unit lower-triangular and using \autoref{def:self-attn-causal-proj},
+$$
+(\mathbf{X}, \mathbf{Q}, \mathbf{K}, \mathbf{V}) \longmapsto \mathrm{RN} \big( \mathbf{L} \odot \exp{\mathbf{Z}} \big) \mathbf{X} \mathbf{V}
+$$
+is real-analytic:
+$\exp$ is real-analytic (\autoref{prop:exp-ra});
+Hadamard scaling by fixed $\mathbf{L}$ is real-analytic (\autoref{prop:hadamard});
+by \autoref{rem:row-sum-positive}, every row of $\mathbf{L}\odot \exp(\mathbf{Z})$ sums to a strictly positive value (the diagonal term), so the argument lies in the domain $\boldsymbol{\mathcal{D}}_T$ of \autoref{prop:rn-analytic}; hence $\mathrm{RN}$ is real-analytic there; the final multiplication by $\mathbf{X}\mathbf{V}$ is real-analytic (\autoref{prop:matmul}).
+
+\smallskip
+Therefore, each \emph{single} attention head is real-analytic whether it is vanilla or causal (projection).
+For Multi-Head Self-Attention (\autoref{def:mhsa}), horizontal concatenation across heads is real-analytic (\autoref{prop:stacking}), and the output projection by $\mathbf{W}^O$ is a matrix product (\autoref{prop:matmul}). Hence $(\mathbf{X},\Theta_{\mathrm{attn}})\mapsto \mathrm{attn}_H(\mathbf{X})$ is real-analytic regardless of which attention variant each head uses.
+
+
+\item \textbf{Transformer Block (fixed $T$).}
+$(\mathbf{X},\Theta_{\mathrm{TB}})\mapsto \mathrm{TB}(\mathbf{X})\in\mathbb{R}^{T\times d}$ is real-analytic:
+apply LN row-wise to get $\overline{\mathbf{X}}$ (item~2 with stacking, \autoref{prop:stacking}, and \autoref{lem:equiv-analytic-column});
+apply attention (item~4) to $\overline{\mathbf{X}}$; add the residual (closure under addition, \autoref{prop:closure-real-analytic});
+apply LN row-wise to get $\overline{\mathbf{H}}$ (item~2 with stacking and \autoref{lem:equiv-analytic-column});
+apply the row-wise MLP (item~1 with stacking, \autoref{prop:stacking});
+add the residual again (\autoref{prop:closure-real-analytic}).
+All intermediate matrix multiplications use \autoref{prop:matmul}, and the overall structure is a composition (\autoref{prop:matrix-composition} via \autoref{lem:equiv-analytic-column}).
+
+\item \textbf{Transformer (fixed $T$).}
+$(\mathbf{X},\Theta_{\mathrm{Tr},T})\mapsto \mathrm{Tr}_T(\mathbf{X})
+=\mathrm{TB}^{(L)}\circ\cdots\circ \mathrm{TB}^{(1)}(\mathbf{X})$ is a composition of real-analytic maps from (5), hence real-analytic by \autoref{prop:matrix-composition}.
+\end{enumerate}
+
+All statements extend from vector-valued to matrix-valued, row-wise applications via \autoref{prop:stacking} and \autoref{lem:equiv-analytic-column}, and every sum/product/quotient/composition step above invokes \autoref{prop:closure-real-analytic}, \autoref{prop:matmul}, and \autoref{prop:matrix-composition} as indicated.
+\end{proposition}
+
+\section{Almost Sure Injectivity}\label{sec:app:asinj}
+
+This section establishes a foundational structural result: for causal Transformer Language Models with standard architectural widths and at least one attention head per block, the final hidden state at the last token is almost surely injective with respect to the input sequence, assuming the model parameters are drawn from any absolutely continuous distribution at initialization. Crucially, we show this injectivity is preserved after any finite number of gradient descent (GD) updates.
+
+We organize the section in two parts; \textbf{(i)} Measure-zero collisions via real-analyticity and a witness construction and \textbf{(ii)} Preservation of absolute continuity under gradient descent. Each piece builds toward the main theorem, which asserts that under mild width and head assumptions, the Transformer map from input sequences to last-token representations is injective almost surely, even after multiple rounds of training. The main theorem follows.
+
+
+\begin{assumption}[Minimum Embedding Dimension]\label{assumption:min-emb-dim}
+We assume the embedding dimension satisfies $ d \geq 4 $ and $d_\eta \geq 1$. Furthermore, we assume that each transformer block has at least one attention head.
+These conditions are trivially satisfied in practice: for modern large language models, embedding dimensions are typically in the hundreds or thousands, and each layer has multiple attention heads, so the assumptions impose no practical restrictions on the models under consideration.
+\end{assumption}
+
+\begin{theorem}[Finite-horizon a.s.\ injectivity under GD]\label{thm:main}
+Fix a finite vocabulary $\mathcal{V}$, a context bound $K \in \mathbb{N}$, a time horizon $T \in \mathbb{N}$, and consider the causal Transformer Language Model (TLM) of \autoref{def:tlm} under \autoref{assumption:min-emb-dim}. 
+Let $\left\{ \left(\mathrm{s}_t \in \mathcal{V}^{\leq K}, \mathbf{p}_t \in \Delta^{|\mathcal{V}| - 1}\right) \right\}_{t = 1}^T$ be any sequence of samples and let $\{ \eta_t \in (0,1) \}_{t = 1}^T$ be any sequence of step-sizes. 
+Assume the parameters are randomly initialized and updated by gradient descent:
+\begin{align*}
+\boldsymbol{\theta}_0 &\sim \mu, \qquad \mu \ll \mathrm{Leb}_p,\\
+\boldsymbol{\theta}_{t+1} &= \boldsymbol{\theta}_t - \eta_t \nabla \mathcal{L}_{\mathrm{s}_t, \mathbf{p}_t}(\boldsymbol{\theta}_t),
+\end{align*}
+where $\mathrm{Leb}_p$ denotes Lebesgue measure on $\mathbb{R}^p$ and $\mathcal{L}_{\mathrm{s}, \mathbf{p}} : \mathbb{R}^p \to \mathbb{R}$ is the standard cross-entropy loss
+\[
+\mathcal{L}_{\mathrm{s},\mathbf{p}}(\boldsymbol\theta)
+=\mathrm{CrossEntropy}\big(f(\mathrm{s}\,;\,\boldsymbol\theta),\,\mathbf{p}\big).
+\]
+Then, with probability one over the draw of $\boldsymbol{\theta}_0$, the last-token, last-layer representation map
+\[
+\mathcal{V}^{\le K}\ni \mathrm{s}\ \longmapsto\ \mathbf{r}(\mathrm{s} \, ; \, \boldsymbol{\theta}_T)\in\mathbb{R}^d
+\]
+is injective. Equivalently,
+\[
+\Pr \left[ \exists \, \mathrm{s} \neq \mathrm{t} \in \mathcal{V}^{\leq K} : \mathbf{r}(\mathrm{s} \, ; \, \boldsymbol{\theta}_T) = \mathbf{r}(\mathrm{t} \, ; \, \boldsymbol{\theta}_T) \right] = 0,
+\]
+where $\mathbf{r}( \cdot \, ; \, \boldsymbol{\theta}_T)$ denotes the last-token representation defined in \autoref{eq:last-token-repr}.
+\end{theorem}
+
+\begin{proof} $\newline$
+
+\vspace{-7px}
+Let $\boldsymbol\theta_0 \sim \mu$ with $\mu \ll \mathrm{Leb}_p$.  
+For a fixed training horizon $T$, define the \emph{GD update map}
+\[
+\Phi:\mathbb{R}^p \to \mathbb{R}^p, \qquad 
+\Phi(\boldsymbol\theta_0) \;=\; \boldsymbol\theta_T,
+\]
+i.e.\ $\Phi$ is the composition of $T$ gradient-descent steps with step sizes 
+$\{\eta_t\}_{t=1}^T \subset (0,1)$ on the loss~$\mathcal{L}$.
+
+\textbf{1) Absolute continuity after $T$ steps.}
+By \autoref{cor:finite-steps-ac}, since $\mu \ll \mathrm{Leb}_p$, 
+the pushforward law $\Phi_\# \mu$ of $\boldsymbol\theta_T$ remains absolutely continuous:
+\[
+\boldsymbol\theta_T \;\sim\; \Phi_\# \mu \;\ll\; \mathrm{Leb}_p.
+\]
+
+\textbf{2) Global almost-sure distinctness.}
+Let $\mathcal{S} := \mathcal{V}^{\le K}$, which is finite.  
+By \autoref{cor:global-distinct-h1}, under any absolutely continuous parameter law,
+\[
+\Pr\Big[\, \mathbf{r}(\mathrm{s} \, ; \, \boldsymbol\theta_T) \neq 
+\mathbf{r}(\mathrm{t} \, ; \, \boldsymbol\theta_T)
+\;\;\;\forall\,\mathrm{s}\neq\mathrm{t}\in\mathcal{V}^{\le K}\,\Big] \;=\; 1.
+\]
+
+\noindent
+Thus the map $\mathrm{s} \mapsto \mathbf{r}(\mathrm{s} \, ; \, \boldsymbol\theta_T)$ 
+is injective almost surely, as claimed.
+\end{proof}
+
+
+
+
+\subsection{Absolute continuity ensures almost sure injectivity} \label{subsec:abs-cont}
+
+We begin by fixing two distinct sequences and asking when their last-token representations can coincide. As before, in this subsection we will consider a finite vocabulary $\mathcal{V}$ and a finite context window $K \in \mathbb{N}$. Additionally, recall that for $\boldsymbol{\theta} = (\boldsymbol{\theta}_1, \boldsymbol{\theta}_2, \boldsymbol{\theta}_3) \in \mathbb{R}^p$:
+$$
+\mathbf{r}(\mathrm{u} \, ; \, \boldsymbol{\theta}) := \Big( \mathrm{Tr}_{|\mathrm{u}|} \big( \mathrm{Emb}(\mathrm{u} \, ; \, \boldsymbol{\theta}_1) \, ; \,\boldsymbol{\theta}_2 \big) \Big)_{|\mathrm{u}|} \in \mathbb{R}^d,
+$$
+and for $\mathrm{s} \neq \mathrm{t}$, we define the discrepancy:
+$$
+h(\boldsymbol{\theta}) := \big\| \mathbf{r}(\mathrm{s} \, ; \, \boldsymbol{\theta}) - \mathbf{r}(\mathrm{t} \, ; \, \boldsymbol{\theta}) \big\|_2^2.
+$$ 
+
+
+By \autoref{prop:modules-ra}, this map is real-analytic. To invoke the zero-set theorem, it suffices to show that $h \not\equiv 0$. We construct a parameter configuration $\boldsymbol{\theta}_\star$ such that $\mathbf{r}(\mathrm{s} \, ; \, \boldsymbol{\theta}_\star) \ne \mathbf{r}(\mathrm{t} \, ; \, \boldsymbol{\theta}_\star)$, treating two exhaustive cases:
+
+\vspace{-5px}
+\begin{itemize}[leftmargin=*,itemsep=0em]
+\item \textbf{Case A:} If the sequences differ at their final token or in length, we isolate this distinction via selective initialization of embeddings and positional encodings.
+\item \textbf{Case B:} If they differ earlier, we construct orthogonal embeddings and exploit attention heads to differentiate the contributions to the final representation.
+\end{itemize}
+
+
+In both cases, we demonstrate explicit parameter settings under which the discrepancy is nonzero. This confirms $h \not\equiv 0$, and the zero set $\big\{ \boldsymbol{\theta} : \mathbf{r}(\mathrm{s} \, ; \, \boldsymbol{\theta}) = \mathbf{r}(\mathrm{t} \, ; \, \boldsymbol{\theta}) \big\}$ has measure zero by \autoref{thm:zero-measure-roots}. Hence, if the parameter distribution is absolutely continuous, the probability of a collision is zero. A union bound extends this to any finite set of inputs.
+
+
+\begin{theorem}[Almost-sure pairwise distinctness of last-token representations]\label{thm:a.s.-distinct-h1}
+Let the parameter vector $\boldsymbol{\theta} \in \mathbb{R}^p$ be drawn from any distribution absolutely continuous with respect to Lebesgue measure. Then, for any fixed $\mathrm{s} \ne \mathrm{t}$,
+$$
+\mathrm{Pr}\left[ \, \mathbf{r}(\mathrm{s} \, ; \, \boldsymbol{\theta}) = \mathbf{r}(\mathrm{t}  \, ; \, \boldsymbol{\theta})\, \right] = 0.
+$$
+\end{theorem}
+
+\begin{proof}
+Let $T_\mathrm{s} = |\mathrm{s}|$ and $T_\mathrm{t} = |\mathrm{t}|$, and $h(\boldsymbol{\theta}) := \big\| \mathbf{r}(\mathrm{s} \, ; \, \boldsymbol{\theta}) - \mathbf{r}(\mathrm{t} \, ; \, \boldsymbol{\theta}) \big\|_2^2$.
+Since $h$ is real-analytic (\autoref{prop:modules-ra}), it suffices to show that it is not the zero function on $\mathbb{R}^p$; then $h^{-1}(\{0\})$ has Lebesgue measure zero by \autoref{thm:zero-measure-roots}, and absolute continuity transfers this to probability zero.
+
+We construct a parameter setting $\boldsymbol{\theta}_\star$ for which $h(\boldsymbol{\theta}_\star) > 0$, treating two exhaustive cases:
+
+\textbf{Case A: $T_\mathrm{s} \ne T_\mathrm{t}$ or $\mathrm{s}_{T_\mathrm{s}} \ne \mathrm{t}_{T_\mathrm{t}}$.}
+Set all Transformer parameters to zero so that the network acts as the identity: $\mathrm{Tr}_T(\mathbf{X}) = \mathbf{X}$.
+
+\begin{itemize}[leftmargin=1.5em]
+\item If $\mathrm{s}_{T_\mathrm{s}} \ne \mathrm{t}_{T_\mathrm{t}}$, set $\mathbf{E}_{\mathrm{s}_{T_\mathrm{s}}} = \mathbf{e}_1$, $\mathbf{E}_{\mathrm{t}_{T_\mathrm{t}}} = \mathbf{e}_2 \neq \mathbf{e}_1$, and all other rows of $\mathbf{E}$ to zero. Set $\mathbf{P} = \mathbf{0}_{K \times d}$. Then $\mathbf{r}(\mathrm{s} \, ; \, \boldsymbol{\theta}_\star) = \mathbf{e}_1$, $\mathbf{r}(\mathrm{t} \, ; \, \boldsymbol{\theta}_\star) = \mathbf{e}_2$, so $h(\boldsymbol{\theta}_\star) = \| \mathbf{e}_1 - \mathbf{e}_2 \|_2^2 > 0$.
+
+\item If $T_\mathrm{s} \ne T_\mathrm{t}$, set $\mathbf{E} = \mathbf{0}_{|\mathcal{V}| \times d}$ and $\mathbf{P}_{T_\mathrm{s}} = \mathbf{e}_1$, $\mathbf{P}_{T_\mathrm{t}} = \mathbf{e}_2 \neq \mathbf{e}_1$ (all others zero). Then, again, $\mathbf{r}(\mathrm{s} \, ; \, \boldsymbol{\theta}_\star) = \mathbf{e}_1$, $\mathbf{r}(\mathrm{t} \, ; \, \boldsymbol{\theta}_\star) = \mathbf{e}_2$, so $h(\boldsymbol{\theta}_\star) > 0$.
+\end{itemize}
+
+\textbf{Case B: $T := T_\mathrm{s} = T_\mathrm{t}$ and $\mathrm{s}_T = \mathrm{t}_T$, but $\mathrm{s}_i \ne \mathrm{t}_i$ for some $i \in [T-1]$.}
+Let $i^\star$ be the smallest such index. Note $T \ge 2$.
+
+We construct a model with (i) all blocks after the first set to identity (zero parameters), (ii) in the first block, all heads set to zero except head 1 and the MLP is zero.
+
+We explicitly construct embeddings and head-1 parameters $(\mathbf{Q}, \mathbf{K}, \mathbf{V})$, as well as the output projection $\mathbf{W}^O$, so that $\mathbf{r}(\mathrm{s} \, ; \, \boldsymbol{\theta}_\star) \ne \mathbf{r}(\mathrm{t} \, ; \, \boldsymbol{\theta}_\star)$.
+
+\textbf{1) Embedding Construction.}
+Choose orthogonal vectors $\mathbf{e}, \mathbf{p}, \mathbf{q} \in \mathbb{R}^d$ satisfying:
+\[
+\langle \mathbf{e}, \mathbf{p} \rangle = \langle \mathbf{e}, \mathbf{q} \rangle = \langle \mathbf{p}, \mathbf{q} \rangle = 0,
+\quad
+\langle \mathbf{1}_d, \mathbf{e} \rangle = \langle \mathbf{1}_d, \mathbf{p} \rangle = \langle \mathbf{1}_d, \mathbf{q} \rangle = 0,
+\quad
+\|\mathbf{e}\|_2 = \|\mathbf{p}\|_2 = \|\mathbf{q}\|_2 = 1.
+\]
+Such vectors exist due to \autoref{assumption:min-emb-dim} (requires $d \ge 4$). Set embeddings:
+\[
+\mathbf{E}_v =
+\begin{cases}
+\mathbf{e}, & v \in \{ \mathrm{s}_{i^\star}, \mathrm{s}_T \} \\
+\mathbf{0}_d, & \text{otherwise}
+\end{cases},
+\qquad
+\mathbf{P}_j =
+\begin{cases}
+\mathbf{p}, & j = i^\star \\
+\mathbf{q}, & j = T \\
+\mathbf{0}_d, & \text{otherwise}
+\end{cases}.
+\]
+
+Thus, the input rows before LayerNorm are:
+\[
+\Big[ \mathbf{H}(\mathrm{s} \, ; \, \boldsymbol{\theta}_\star) \Big]_j =
+\begin{cases}
+\mathbf{e} + \mathbf{p}, & j = i^\star \\
+\mathbf{e} + \mathbf{q}, & j = T \\
+\in \{ \mathbf{e}, \mathbf{0}_d \}, & \text{otherwise}
+\end{cases},
+\qquad
+\Big[ \mathbf{H}(\mathrm{t} \, ; \, \boldsymbol{\theta}_\star) \Big]_j =
+\begin{cases}
+\mathbf{p}, & j = i^\star \\
+\mathbf{e} + \mathbf{q}, & j = T \\
+\in \{ \mathbf{e}, \mathbf{0}_d \}, & \text{otherwise}
+\end{cases}.
+\]
+
+\textbf{2) LayerNorm Output.}
+Use LayerNorm with $(\boldsymbol{\gamma}, \boldsymbol{\beta}) = (\mathbf{1}, \mathbf{0})$. Since all components have zero mean, the normalization is:
+\[
+\mathrm{LN}(\mathbf{x}) = \frac{\mathbf{x}}{\sqrt{\frac{1}{d}\|\mathbf{x}\|^2 + \varepsilon}} =: c(\mathbf{x}) \mathbf{x}.
+\]
+Define:
+\[
+c_{ep} := \left( \tfrac{2}{d} + \varepsilon \right)^{-1/2},
+\qquad
+c_e := \left( \tfrac{1}{d} + \varepsilon \right)^{-1/2}.
+\]
+Then:
+\[
+\Big[ \overline{\mathbf{H}}(\mathrm{s} \, ; \, \boldsymbol{\theta}_\star) \Big]_j =
+\begin{cases}
+c_{ep}(\mathbf{e} + \mathbf{p}), & j = i^\star \\
+c_{ep}(\mathbf{e} + \mathbf{q}), & j = T \\
+\in \{ \mathbf{0}_d, c_e \mathbf{e} \}, & \text{otherwise}
+\end{cases},
+\quad
+\Big[ \overline{\mathbf{H}}(\mathrm{t} \, ; \, \boldsymbol{\theta}_\star) \Big]_j =
+\begin{cases}
+c_e \mathbf{p}, & j = i^\star \\
+c_{ep}(\mathbf{e} + \mathbf{q}), & j = T \\
+\in \{ \mathbf{0}_d, c_e \mathbf{e} \}, & \text{otherwise}
+\end{cases}.
+\]
+
+\textbf{3) Head Parameters.}
+Let $\mathbf{e}_1 \in \mathbb{R}^{d_\eta}$ be the first standard basis vector. Set:
+\[
+\mathbf{Q} = \alpha \mathbf{e} \mathbf{e}_1^\top, \qquad
+\mathbf{K} = \beta \mathbf{p} \mathbf{e}_1^\top, \qquad
+\mathbf{V} = \mathbf{e} \mathbf{e}_1^\top,
+\]
+where $\alpha, \beta > 0$ are scalars to be chosen.
+
+Then for any $j$, attention vectors are:
+\[
+\mathbf{q}_j = \alpha \left\langle \Big[ \overline{\mathbf{H}}(\cdot \, ; \, \boldsymbol{\theta}_\star) \Big]_j, \; \mathbf{e} \right\rangle \mathbf{e}_1,
+\quad
+\mathbf{k}_j = \beta \left\langle \Big[ \overline{\mathbf{H}}(\cdot \, ; \, \boldsymbol{\theta}_\star) \Big]_j, \; \mathbf{p} \right\rangle \mathbf{e}_1,
+\quad
+\mathbf{v}_j = \left\langle \Big[ \overline{\mathbf{H}}(\cdot \, ; \, \boldsymbol{\theta}_\star) \Big]_j, \; \mathbf{e} \right\rangle \mathbf{e}_1.
+\]
+
+At row $T$, $\mathbf{q}_T^{(\mathrm{s})} = \mathbf{q}_T^{(\mathrm{t})} = \alpha c_{ep} \mathbf{e}_1$.
+Only the key at $i^\star$ is nonzero:
+\[
+\mathbf{k}_{i^\star}^{(\mathrm{s})} = \beta c_{ep} \mathbf{e}_1,
+\quad
+\mathbf{k}_{i^\star}^{(\mathrm{t})} = \beta c_e \mathbf{e}_1.
+\]
+Value vectors at $i^\star$ differ:
+\[
+\mathbf{v}_{i^\star}^{(\mathrm{s})} = c_{ep} \mathbf{e}_1,
+\quad
+\mathbf{v}_{i^\star}^{(\mathrm{t})} = \mathbf{0}_d.
+\]
+And $\mathbf{v}_T^{(\mathrm{s})} = \mathbf{v}_T^{(\mathrm{t})} = c_{ep} \mathbf{e}_1$.
+
+\textbf{4) Attention Weights.}
+The only nonzero score is at $i^\star$:
+\[
+\mathbf{S}_{T, i^\star}^{(\mathrm{s})} = \frac{\alpha \beta}{\sqrt{d_\eta}} c_{ep}^2,
+\quad
+\mathbf{S}_{T, i^\star}^{(\mathrm{t})} = \frac{\alpha \beta}{\sqrt{d_\eta}} c_{ep} c_e,
+\quad
+\mathbf{S}_{T, j}^{(\cdot)} = 0 \text{ for } j \ne i^\star.
+\]
+Fix $\delta \in (0, \tfrac{1}{2})$ and define $L := \log\left( \frac{1-\delta}{\delta}(T-1) \right)$.
+Set $\alpha \beta = \sqrt{d_\eta} L / c_{ep}^2$, so $\mathbf{S}_{T, i^\star}^{(\mathrm{s})} = L$ and $\mathbf{S}_{T, i^\star}^{(\mathrm{t})} > L$. Then:
+\[
+\mathbf{A}_{T, i^\star}^{(\mathrm{s})} \ge 1 - \delta,
+\quad
+\mathbf{A}_{T, i^\star}^{(\mathrm{t})} > 1 - \delta,
+\quad
+\mathbf{A}_{T, j}^{(\cdot)} \le \frac{\delta}{T-1}\ \text{for } j \ne i^\star.
+\]
+
+\textbf{5) Self-Attention Output.}
+\[
+\mathbf{y}_T^{(\mathrm{s})} = (1 - \delta) c_{ep} \mathbf{e}_1 + \sum_{j \ne i^\star} \mathbf{A}_{T, j}^{(\mathrm{s})} \mathbf{v}_j^{(\mathrm{s})},
+\quad
+\mathbf{y}_T^{(\mathrm{t})} = \sum_{j \ne i^\star} \mathbf{A}_{T, j}^{(\mathrm{t})} \mathbf{v}_j^{(\mathrm{t})}.
+\]
+Tails are bounded by:
+\[
+\left\| \sum_{j \ne i^\star} \mathbf{A}_{T, j}^{(\cdot)} \mathbf{v}_j^{(\cdot)} \right\|_2 \leq \delta c_e.
+\]
+Since both outputs lie in $\mathrm{span}\{\mathbf{e}_1\}$, we compare:
+\[
+\langle \mathbf{y}_T^{(\mathrm{s})} - \mathbf{y}_T^{(\mathrm{t})}, \mathbf{e}_1 \rangle \ge (1 - \delta) c_{ep} - 2 \delta c_e.
+\]
+Choosing $\delta < \frac{c_{ep}}{c_{ep} + 2c_e}$ makes this strictly positive.
+
+\textbf{6) Output Projection and Propagation.}
+Let $\mathbf{W}^O$ be the matrix with $(\mathbf{W}^O)_{1,1} = 1$ and all other entries zero. Then the head output is projected into coordinate 1, making the last row of the first transformer block differ between $\mathrm{s}$ and $\mathrm{t}$ in the first coordinate. Since the original rows at $T$ were identical and the rest of the network is identity, this difference propagates to the final output, and we get $\mathbf{r}(\mathrm{s} \, ; \, \boldsymbol{\theta}_\star) \ne \mathbf{r}(\mathrm{t} \, ; \, \boldsymbol{\theta}_\star)$.
+
+\end{proof}
+
+\begin{remark}[Causal Self-Attention]
+The same construction works for causal self-attention. In our setup, attention at position $T$ only needs to consider tokens at positions $j \le T$, and we only rely on attention from $T$ to $i^\star < T$. All nonzero scores occur at these allowable indices, so causal masking does not affect the computation or the argument.
+\end{remark}
+
+
+\begin{corollary}[Almost-sure global distinctness over a finite input family]\label{cor:global-distinct-h1}
+Let $\mathcal{S} \subseteq \mathcal{V}^{\leq K}$ be any finite collection of inputs. If $\boldsymbol{\theta}$ is drawn from a law absolutely continuous w.r.t. $\mathrm{Leb}_p$, then
+$$
+\mathrm{Pr} \big[\ \mathbf{r}(\mathrm{s} \, ; \, \boldsymbol{\theta}) \neq \mathbf{r}(\mathrm{t} \, ; \, \boldsymbol{\theta})\ \text{ for all distinct } \mathrm{s},\mathrm{t}\in\mathcal{S}\ \big]\;=\;1.
+$$
+In particular, the last-token representations are pairwise distinct almost surely across all inputs.
+\end{corollary}
+
+\begin{proof}
+For each unordered pair $\{ \mathrm{s},\mathrm{t} \} \subset \mathcal{S}$ with $\mathrm{s} \neq \mathrm{t}$, \autoref{thm:a.s.-distinct-h1} gives $\mathrm{Pr}[ \, \mathbf{r}(\mathrm{s} \, ; \, \boldsymbol{\theta}) = \mathbf{r}(\mathrm{t} \, ; \, \boldsymbol{\theta}) \, ] = 0$. By the union bound over the finitely many pairs ($\binom{|\mathcal{S}|}{2}$ in total),
+$$
+\mathrm{Pr} \Big[\, \exists \, \mathrm{s} \neq \mathrm{t} \in \mathcal{S} : \mathbf{r}(\mathrm{s} \, ; \, \boldsymbol{\theta}) = \mathbf{r}(\mathrm{t} \, ; \, \boldsymbol{\theta}) \, \Big] \leq \sum_{\mathrm{s},\mathrm{t}} \mathrm{Pr} \big[ \, \mathbf{r}(\mathrm{s} \, ; \, \boldsymbol{\theta}) = \mathbf{r}(\mathrm{t} \, ; \, \boldsymbol{\theta}) \, \big] = 0.
+$$
+Hence the complement event has probability $1$.
+\end{proof}
+
+\begin{remark}[Pointwise vs.\ last-token injectivity]
+\citet{sutter2025nonlinearrepresentationdilemmacausal} establish a related but distinct guarantee. They analyze the mapping from a prompt to the \emph{entire} sequence (matrix) of hidden states, which already rules out collisions for inputs of different lengths. Their result is \emph{pointwise injectivity}: if two prompts differ at position $t$, then the $t$-th hidden state (row) differs. This does not, by itself, imply injectivity of the map to the final hidden state / last-token embedding that we study, so two different prompts could still coincide at the last token--our quantity of operational interest.
+\end{remark}
+
+\subsection{Absolute continuity of the parameter distribution is preserved under GD}
+
+Our goal in this subsection is to explain why absolute continuity of the parameter law at initialization survives any finite number of gradient–descent (GD) steps, thereby allowing the almost-sure injectivity argument from the previous subsection to persist throughout training. The story begins with regularity: by \autoref{prop:modules-ra} and \autoref{prop:log-real-analytic}, the loss $\mathcal{L}_{\mathrm{s},\mathbf{p}}$ is real-analytic, and real-analyticity is closed under differentiation and composition. Consequently the GD map $\phi(\boldsymbol\theta)=\boldsymbol\theta-\eta\nabla\mathcal{L}_{\mathrm{s},\mathbf{p}}(\boldsymbol\theta)$ is real-analytic, its Jacobian $D\phi(\boldsymbol\theta)=\mathbf{I}_p-\eta\nabla^2\mathcal{L}_{\mathrm{s},\mathbf{p}}(\boldsymbol\theta)$ is real-analytic, and so is $\boldsymbol\theta\mapsto \det D\phi(\boldsymbol\theta)$ (the determinant is a polynomial in the matrix entries). We then rule out the degenerate case by a witness: at $\boldsymbol\theta^\star=\mathbf{0}_p$, our Hessian calculation (\autoref{lem:full-hessian-spectrum-compact}) shows $\det D\phi(\boldsymbol\theta^\star)>0$, hence $\det D\phi$ is not identically zero and its zero set $\mathcal{C}:=\{\det D\phi=0\}$ has Lebesgue measure zero by the real-analytic zero–set theorem (\autoref{thm:zero-measure-roots}; summarized in \autoref{thm:gd-jacobian-ae-ref}). On the complement $\mathbb R^p\setminus\mathcal{C}$, the Inverse Function Theorem (\autoref{thm:inverse-function}) provides, for every $\boldsymbol\theta$, a neighborhood on which $\phi$ is a $C^1$ diffeomorphism. Although these neighborhoods form an a priori uncountable cover, the second countability of $\mathbb R^p$ (and of its subspaces) ensures a \emph{countable} subcover of such charts (\autoref{prop:std-Rp}, \autoref{lem:countable-chart-cover}). This countability is crucial because it lets us pass from local statements to a global measure statement via countable unions. With this cover in hand, the change-of-variables formula on each chart (\autoref{thm:COV-cite}) implies that the image under the local inverse of any null set remains null; piecing the charts together and adding the null set $\mathcal{C}$ shows that preimages of Lebesgue-null sets under $\phi$ are null (\autoref{lem:preimage-null-null}). Equivalently, $\phi$ pushes absolutely continuous laws to absolutely continuous laws (\autoref{thm:ac-gd}); iterating across finitely many GD steps preserves absolute continuity (\autoref{cor:finite-steps-ac}). Finally, combining this preservation with the almost-sure pairwise distinctness of last-token representations over any finite input family (\autoref{cor:global-distinct-h1}) yields the main consequence we need for training: the last-token representation map remains injective almost surely after any finite GD horizon.
+
+\subsubsection{Witness Construction}
+
+\begin{lemma}[Zero-gate through scalar loss]\label{lem:zero-gate-loss-r}
+Let $\boldsymbol{\mathcal{U}} \subseteq \mathbb{R}^{m+q}$ be open and write points as
+$\mathbf{v} = (\boldsymbol{\xi},\boldsymbol{\psi})$ with $\boldsymbol{\xi} \in \mathbb{R}^m$ and $\boldsymbol{\psi} \in \mathbb{R}^q$.
+Let $\pi : \mathbb{R}^{m+q} \to \mathbb{R}^m$ be the projection $\pi(\boldsymbol{\xi}, \boldsymbol{\psi}) = \boldsymbol{\xi}$.
+Consider
+$$
+g \in C^2(\mathbb{R}^m \, ; \, \mathbb{R}^{n\times r}), \qquad
+h \in  C^2(\boldsymbol{\mathcal{U}} \, ; \, \mathbb{R}^{r}),
+$$
+and define $f : \boldsymbol{\mathcal{U}} \to \mathbb{R}^{n}$ by
+$$
+f(\boldsymbol{\xi}, \boldsymbol{\psi}) := g(\boldsymbol{\xi}) \, h(\boldsymbol{\xi}, \boldsymbol{\psi})
+= g\big( \pi(\boldsymbol{\xi}, \boldsymbol{\psi}) \big) \, h(\boldsymbol{\xi}, \boldsymbol{\psi}).
+$$
+Let $\mathcal{L} \in C^2(\mathbb{R}^n;\mathbb{R})$ and set
+$$
+R := \mathcal{L} \circ f : \boldsymbol{\mathcal{U}} \to \mathbb{R}, \qquad
+R(\boldsymbol{\xi}, \boldsymbol{\psi}) = \mathcal{L} \big( g(\boldsymbol{\xi}) \, h(\boldsymbol{\xi}, \boldsymbol{\psi}) \big).
+$$
+Fix $\mathbf{v}_0 = (\boldsymbol{\xi}_0, \boldsymbol{\psi}_0) \in \boldsymbol{\mathcal{U}}$ and assume $g(\boldsymbol{\xi}_0) = \mathbf{0}_{n\times r}$.
+Then the Hessian of $R$ at $\mathbf{v}_0$ has block form
+$$
+\nabla^2 R(\mathbf{v}_0) =
+\begin{pmatrix}
+\nabla_{\boldsymbol{\xi}\boldsymbol{\xi}}^2 \,R(\mathbf{v}_0) & \nabla_{\boldsymbol{\xi}\boldsymbol{\psi}}^2 \, R(\mathbf{v}_0)\\[2pt]
+\nabla_{\boldsymbol{\psi}\boldsymbol{\xi}}^2 \, R(\mathbf{v}_0) & \nabla_{\boldsymbol{\psi}\boldsymbol{\psi}}^2 \, R(\mathbf{v}_0)
+\end{pmatrix} =
+\begin{pmatrix}
+\nabla_{\boldsymbol{\xi}\boldsymbol{\xi}}^2 R(\mathbf{v}_0) & \mathbf{0}_{m\times q}\\[2pt]
+\mathbf{0}_{q\times m} & \mathbf{0}_{q\times q}
+\end{pmatrix}.
+$$
+i.e.\ all mixed and $\boldsymbol{\psi}$–only second partials vanish.
+\end{lemma}
+
+\begin{proof} $\newline$
+
+\vspace{-7px}
+\textbf{1)} Introduce the bilinear multiplication map $\mu : \mathbb{R}^{n\times r} \times \mathbb{R}^r \to \mathbb{R}^n$, $\mu(\mathbf{M}, \mathbf{y}) = \mathbf{M} \mathbf{y}$, and the $C^2$ map
+$H : \boldsymbol{\mathcal{U}} \to \mathbb{R}^{n \times r} \times \mathbb{R}^r$, $H(\boldsymbol{\xi}, \boldsymbol{\psi}) = (g(\boldsymbol{\xi}), h(\boldsymbol{\xi}, \boldsymbol{\psi}))$. Then $f = \mu \circ H$ and we write:
+$$
+g_0 := g(\boldsymbol{\xi}_0) = \mathbf{0}_{n \times r} \qquad h_0 := h(\boldsymbol{\xi}_0, \boldsymbol{\psi}_0) \qquad H(\mathbf{v_0}) = (g_0, h_0).
+$$
+
+Because $\mu$ is bilinear, $D \mu (\mathbf{M}, \mathbf{y})[(\Delta\mathbf{M}, \Delta\mathbf{y})] = \Delta\mathbf{M} \, \mathbf{y} + \mathbf{M} \, \Delta \mathbf{y}$. By the chain rule:
+\begin{align*}
+Df(\mathbf{v}_0) \big[ (\mathbf{h}_{\boldsymbol{\xi}}, \mathbf{h}_{\boldsymbol{\psi}}) \big] &= D\mu(g_0,h_0)\Big[ \, Dg(\boldsymbol{\xi}_0)[ \mathbf{h}_{\boldsymbol{\xi}} ], \; Dh(\mathbf{v}_0)[ (\mathbf{h}_{\boldsymbol{\xi}}, \mathbf{h}_{\boldsymbol{\psi}}) ] \, \Big] \\
+&= Dg(\boldsymbol{\xi}_0) [ \mathbf{h}_{\boldsymbol{\xi}} ] \, h_0 + \underbrace{g_0}_{\mathbf{0}_{n \times r}} \, Dh(\mathbf{v}_0)[ (\mathbf{h}_{\boldsymbol{\xi}}, \mathbf{h}_{\boldsymbol{\psi}}) ] \\
+&= Dg(\boldsymbol{\xi}_0) [ \mathbf{h}_{\boldsymbol{\xi}} ] \, h_0.
+\end{align*}
+In particular, $Df(\mathbf{v}_0) \big[ (\mathbf{0}_m, \; \cdot \; ) \big] = \mathbf{0}_n$. The second-order chain rule for Fr\'echet derivatives (e.g. \citealt[Thm.~18.4]{Magnus_Neudecker_2019}) yields:
+\begin{equation*}
+D^2 f(\mathbf{v}_0)[\mathbf{h},\mathbf{k}]
+= D^2\mu \big(H(\mathbf{v}_0) \big) \big[ \, DH(\mathbf{v}_0)[\mathbf{h}], \, DH(\mathbf{v}_0)[\mathbf{k}] \, \big] + D\mu \big(H(\mathbf{v}_0)\big) \big[ \, D^2H(\mathbf{v}_0)[\mathbf{h},\mathbf{k}] \, \big].
+\end{equation*}
+Because $\mu$ is bilinear, $D^2 \mu \equiv \mathbf{0}$ and the first term is $0$. Furthermore,
+$$
+D^2 H(\mathbf{v}_0) [\mathbf{h}, \mathbf{k}] = \Big( \, D^2 g(\boldsymbol{\xi}_0)[\mathbf{h}_{\boldsymbol{\xi}}, \mathbf{k}_{\boldsymbol{\xi}}], \; D^2 h(\mathbf{v}_0) \big[ (\mathbf{h}_{\boldsymbol{\xi}}, \mathbf{h}_{\boldsymbol{\psi}}), (\mathbf{k}_{\boldsymbol{\xi}}, \mathbf{k}_{\boldsymbol{\psi}}) \big] \, \Big),
+$$
+and it holds that:
+\begin{align*}
+D^2 f(\mathbf{v}_0)[\mathbf{h}, \mathbf{k}] &= D\mu(g_0, h_0) \Big[ \, D^2 g(\boldsymbol{\xi}_0)[\mathbf{h}_{\boldsymbol{\xi}}, \mathbf{k}_{\boldsymbol{\xi}}], \; D^2 h(\mathbf{v}_0)\big[ (\mathbf{h}_{\boldsymbol{\xi}}, \mathbf{h}_{\boldsymbol{\psi}}), (\mathbf{k}_{\boldsymbol{\xi}}, \mathbf{k}_{\boldsymbol{\psi}}) \big] \, \Big] \\
+&= \Big( D^2 g(\boldsymbol{\xi}_0)[\mathbf{h}_{\boldsymbol{\xi}}, \mathbf{k}_{\boldsymbol{\xi}}] \Big) \, h_0 + \underbrace{g_0}_{\mathbf{0}_{n \times r}} \Big( D^2 h(\mathbf{v}_0)\big[ (\mathbf{h}_{\boldsymbol{\xi}}, \mathbf{h}_{\boldsymbol{\psi}}), (\mathbf{k}_{\boldsymbol{\xi}}, \mathbf{k}_{\boldsymbol{\psi}}) \big] \Big) \\
+&= \Big( D^2 g(\boldsymbol{\xi}_0)[\mathbf{h}_{\boldsymbol{\xi}}, \mathbf{k}_{\boldsymbol{\xi}}] \Big) \, h_0.
+\end{align*}
+If at least one of the two directions has $\boldsymbol{\xi}$–component zero, then
+$D^2 g(\boldsymbol{\xi}_0)[\mathbf{h}_{\boldsymbol{\xi}},\mathbf{k}_{\boldsymbol{\xi}}]=\mathbf{0}$, so the bilinear form vanishes.
+
+\textbf{2)} Apply the second-order chain rule to $R = \mathcal{L} \circ f$ at $\mathbf{v}_0$:
+\begin{equation*}
+D^2 R(\mathbf{v}_0)[\mathbf{h},\mathbf{k}] = D^2 \mathcal{L} \big( f(\mathbf{v}_0) \big) \big[ \, Df(\mathbf{v}_0)[\mathbf{h}], \, Df(\mathbf{v}_0)[\mathbf{k}] \, \big] + D\mathcal{L}\big( f(\mathbf{v}_0) \big) \big[ \, D^2 f(\mathbf{v}_0)[\mathbf{h},\mathbf{k}] \, \big]. \tag{$\star$}
+\end{equation*}
+By (\textbf{1}), if at least one of the two directions is pure $\boldsymbol{\psi}$, both terms on the right-hand side of vanish.
+Therefore
+$$
+D^2 R(\mathbf{v}_0)[\mathbf{h},\mathbf{k}]=0
+\qquad\text{whenever at least one of }\mathbf{h},\mathbf{k}\text{ is of the form }(\mathbf{0}_m, \; \cdot \;).
+$$
+Invoking \autoref{prop:frechet-hessian},
+this is exactly the statement that the $\boldsymbol{\xi}\boldsymbol{\psi}$, $\boldsymbol{\psi}\boldsymbol{\xi}$ and
+$\boldsymbol{\psi}\boldsymbol{\psi}$ Hessian blocks are $\mathbf{0}$. The remaining block
+$\nabla_{\boldsymbol{\xi} \boldsymbol{\xi}}^2 R(\mathbf{v}_0)$ is whatever is induced by $(\star)$ for pairs 
+$$
+(\mathbf{h},\mathbf{k}) = \big( (\mathbf{h}_{\boldsymbol{\xi}}, \mathbf{0}_q), (\mathbf{k}_{\boldsymbol{\xi}},\mathbf{0}_q) \big).
+$$
+\end{proof}
+
+
+
+\begin{lemma}[Spectrum under block-diagonal extension]\label{lem:spectrum-union-block}
+Let $f\in C^2(\mathbb{R}^{m+q}\, ; \, \mathbb{R})$, and fix
+$\mathbf{v} = (\boldsymbol{\xi}_0, \boldsymbol{\psi}_0) \in \mathbb{R}^{m+q}$.
+Assume the Hessian of $f$ at $\mathbf{v}$ has the block form
+$$
+\mathbf{H} := \nabla^2 f(\mathbf{v})
+\ =\
+\begin{pmatrix}
+\mathbf{B} & \mathbf{0}_{m \times q}\\
+\mathbf{0}_{q \times m} & \mathbf{0}_{q \times q}
+\end{pmatrix},
+\qquad \mathbf{B} \in \mathbb{R}^{m \times m}.
+$$
+
+Then the characteristic polynomial factorizes as
+$$
+\chi_\mathbf{H}(\lambda) := \det\big(\lambda \mathbf{I}_{m+q} - \mathbf{H} \big)
+ = \det\big(\lambda \mathbf{I}_m - \mathbf{B}\big) \, \lambda^{q}.
+$$
+Consequently,
+$$
+\sigma(\mathbf{H}) = \sigma(\mathbf{B}) \cup \{0\},
+\quad\text{and}\quad
+\mathrm{mult}_\mathbf{H}(0)\ =\ \mathrm{mult}_\mathbf{B}(0)\,+\,q,
+$$
+i.e., the spectrum of $H$ consists of the eigenvalues of $B$ together with $q$ additional zeros,
+and the algebraic multiplicity of the eigenvalue $0$ for $H$ equals that for $B$ plus $q$.
+\end{lemma}
+
+\begin{proof}
+Since $\mathbf{H}$ is block diagonal,
+$$
+\lambda \mathbf{I}_{m+q} - \mathbf{H}
+=
+\begin{pmatrix}
+\lambda \mathbf{I}_m - \mathbf{B} & \mathbf{0}_{m \times q}\\
+\mathbf{0}_{q \times m} & \lambda \mathbf{I}_q
+\end{pmatrix}.
+$$
+The determinant of a block triangular (in particular block diagonal) matrix equals the product of
+the determinants of its diagonal blocks (e.g. \citealt[Cor.~0.8.5]{HornJohnsonMatrixAnalysis}). Hence
+$$
+\chi_\mathbf{H}(\lambda)
+=\det(\lambda \mathbf{I}_m - \mathbf{B}) \cdot \det(\lambda \mathbf{I}_q)
+=\det(\lambda \mathbf{I}_m - \mathbf{B}) \cdot \lambda^{\,q}.
+$$
+The zeros of $\chi_\mathbf{H}$ are the eigenvalues of $\mathbf{H}$ counted with algebraic multiplicity, which yields
+$\sigma(\mathbf{H}) = \sigma(\mathbf{B}) \cup \{ 0 \}$ and
+$\mathrm{mult}_\mathbf{H}(0) = \mathrm{mult}_\mathbf{B}(0) + q$.
+\end{proof}
+
+\begin{remark}
+If $0 \in \sigma(\mathbf{B})$, then $0$ appears in $\sigma(\mathbf{H})$ with multiplicity strictly larger than $q$; the
+statement above accounts for this by adding $q$ to the algebraic multiplicity of $0$ carried over
+from $\mathbf{B}$.
+\end{remark}
+
+
+\begin{lemma}[Hessian of $\mathcal{L}$ w.r.t.\ $\mathbf{U}, \boldsymbol{\beta}$ at $\boldsymbol\theta^\star=\mathbf{0}$ and its spectrum]\label{lem:subhessian-spectrum}
+Let $n:=|\mathcal{V}|$ and $d$ be the embedding width.  
+Fix $(\mathrm{s},\mathbf{p})\in\mathcal{V}^{\le K}\times\Delta^{n-1}$, and consider the Transformer Language Model of \autoref{def:tlm}. In the unembedding layer, set the LayerNorm scale to zero, $\boldsymbol{\gamma} = \mathbf{0}_d$.  
+Let the parameter be ordered as
+$$
+\boldsymbol{\theta} = \big( \mathbf{u}, \boldsymbol{\beta}, \boldsymbol{\gamma}, \boldsymbol{\theta}' \big),
+\qquad
+\mathbf{u} := \mathrm{vec}_{n, d}(\mathbf{U}) \in \mathbb{R}^{nd}, \; \boldsymbol{\beta} \in \mathbb{R}^d.
+$$
+Restrict attention to the $(\mathbf{u},\boldsymbol\beta)$-coordinates and the base point
+$$
+\boldsymbol{\theta}_\star = \mathbf{0}_p \quad \text{i.e.} \quad \mathbf{U}=\mathbf{0}_{n\times d}, \, \boldsymbol{\beta} = \mathbf{0}_d, \,  \boldsymbol{\gamma} = \mathbf{0}_d, \,  \boldsymbol{\theta}' = \mathbf{0}.
+$$
+Write $\mathbf{b}:=\tfrac1n \mathbf{1}_n$ and $\mathbf{w} := \mathbf{b} - \mathbf{p} \in \mathbb{R}^n$.
+
+Then the Hessian of the cross-entropy loss
+$$
+\mathcal{L}(\boldsymbol{\theta}) = \mathrm{CrossEntropy} \big( f(\mathrm{s} \, ; \, \boldsymbol{\theta}), \mathbf{p} \big)
+$$
+with respect to $(\mathbf{u}, \boldsymbol{\beta})$ at $\boldsymbol{\theta}_\star$ is the symmetric block matrix
+$$
+\nabla^2_{(\mathbf{u}, \boldsymbol{\beta})} \mathcal{L}(\boldsymbol{\theta}_\star)
+=
+\begin{pmatrix}
+\mathbf{0}_{nd\times nd} & \ \ \mathbf{I}_d\otimes \mathbf{w} \\[4pt]
+\mathbf{I}_d \otimes \mathbf{w}^\top & \ \ \mathbf{0}_{d\times d}
+\end{pmatrix}.
+$$
+The spectrum of this Hessian is
+$$
+\mathrm{spec} \big( \nabla^2_{(\mathbf{u}, \boldsymbol{\beta})} \mathcal{L} (\boldsymbol{\theta}_\star) \big) = \{ \, \underbrace{+ \| \mathbf{w} \|_2, \ldots, + \| \mathbf{w} \|_2}_{d}, \, \underbrace{- \| \mathbf{w} \|_2, \ldots, -\| \mathbf{w} \|_2}_{d},\ 
+\underbrace{0, \ldots, 0}_{d(n-1)} \, \}.
+$$
+
+\end{lemma}
+
+\begin{proof} $\newline$
+
+\vspace{-5px}
+\textbf{1) Logits in vectorized form.}
+With $\boldsymbol{\gamma} = \mathbf{0}_d$, the LayerNorm output at the unembedding is constant:
+$\mathrm{LN}(\mathbf{h}) \equiv \boldsymbol{\beta}$ (\autoref{def:layer-norm}).  
+Thus the logits before the final softmax are
+$$
+\mathbf{Z} = \mathbf{U} \, \boldsymbol{\beta} \in \mathbb{R}^n.
+$$
+Using $\mathrm{vec}(\mathbf{A} \mathbf{X} \mathbf{b}) = (\mathbf{b}^\top \otimes \mathbf{A}) \, \mathrm{vec}(\mathbf{X})$
+(standard identity for vectorization, cf.\ \cite{henderson1981vec}), with $\mathbf{A} = \mathbf{I}_n$ and $\mathbf{b} = \boldsymbol{\beta}$,
+$$
+\mathbf{z} = \mathrm{vec}(\mathbf{Z}) = \mathrm{vec}(\mathbf{U} \boldsymbol{\beta}) = (\boldsymbol{\beta}^\top \otimes \mathbf{I}_n) \, \mathbf{u}.
+$$
+Therefore, near $(\mathbf{u}, \boldsymbol{\beta}) = (\mathbf{0}_{nd}, \mathbf{0}_d)$, the logits map is the bilinear function
+$$
+z(\mathbf{u}, \boldsymbol{\beta}) := (\boldsymbol{\beta}^\top \otimes \mathbf{I}_n) \, \mathbf{u} \in \mathbb{R}^n.
+$$
+
+\textbf{2) First and second differentials.}
+Let $(\mathbf{h}, \boldsymbol{\eta})$ and $(\mathbf{k}, \boldsymbol{\xi})$ be directions in $\mathbb{R}^{nd} \times \mathbb{R}^d$.
+Differentiating $z( \mathbf{u}, \boldsymbol{\beta}) = (\boldsymbol{\beta}^\top \otimes \mathbf{I}_n) \mathbf{u}$ gives
+$$
+Dz(\mathbf{u},\boldsymbol{\beta})[\mathbf{h}, \boldsymbol{\eta}] = (\boldsymbol{\beta}^\top \otimes \mathbf{I}_n)\mathbf{h} + (\boldsymbol{\eta}^\top \otimes \mathbf{I}_n) \mathbf{u}.
+$$
+At $(\mathbf{u}, \boldsymbol{\beta}) = (\mathbf{0}_{nd}, \mathbf{0}_d)$,
+$$
+Dz(\mathbf{0}_{nd}, \mathbf{0}_d)[\mathbf{h}, \boldsymbol{\eta}] = \mathbf{0}_{n \times (nd + d)}
+$$
+(since both terms are multiplied by $\mathbf{u}$ or $\boldsymbol{\beta}$).
+Differentiating once more (or, equivalently, using bilinearity of $z$) yields the constant symmetric bilinear form
+$$
+D^2 z(\mathbf{0}_{nd}, \mathbf{0}_n) \big[ (\mathbf{h}, \boldsymbol{\eta}), (\mathbf{k}, \boldsymbol{\xi}) \big] = ( \boldsymbol{\xi}^\top \otimes \mathbf{I}_n) \, \mathbf{h} + (\boldsymbol{\eta}^\top \otimes \mathbf{I}_n) \, \mathbf{k}.
+$$
+
+\textbf{3) Gradient of the CE-in-softmax at the origin.}
+Let $F(\mathbf{z}) := \mathrm{CrossEntropy}(\mathrm{softmax}(\mathbf{z}), \mathbf{p})$.
+A standard computation (softmax Jacobian) gives
+$$
+\nabla_{\mathbf{z}} F(\mathbf{z}) = \mathrm{softmax}(\mathbf{z}) - \mathbf{p}.
+$$
+At $\mathbf{z} = \mathbf{0}_{n}$, $\mathrm{softmax}\left(\mathbf{0}_n\right) = \frac1n \mathbf{1}_n =: \mathbf{b}$, hence
+$$
+\nabla_{\mathbf{z}} F(\mathbf{0}_n) = \mathbf{b} - \mathbf{p} =: \mathbf{w}.
+$$
+
+\textbf{4) Second-order chain rule for $F\circ Z$ at $(\mathbf{0},\mathbf{0})$.}
+Similarly to the proof of \autoref{lem:zero-gate-loss-r}, the second differential of a composition is
+$$
+D^2(F \circ z)(\mathbf{v})[\mathbf{h}, \mathbf{k}]
+= D^2F( z( \mathbf{v})) \big[Dz(\mathbf{v}) \mathbf{h}, \, Dz(\mathbf{v})\mathbf{k}\big] + DF(z(\mathbf{v})) \big[D^2z(\mathbf{v})[\mathbf{h}, \mathbf{k}]\big].
+$$
+At $\mathbf{v} = (\mathbf{0}_{nd},\mathbf{0}_d)$, $Dz(\mathbf{v}) = \mathbf{0}_{n \times (nd + d)}$ and $DF(z(\mathbf{v})) = \nabla_{\mathbf{z}}F(\mathbf{0}_n)^\top = \mathbf{w}^\top$, so
+\begin{align*}
+D^2\mathcal{L}(\mathbf{v}) \big[ (\mathbf{h}, \boldsymbol{\eta}), (\mathbf{k}, \boldsymbol{\xi}) \big]
+&= \mathbf{w}^\top\, D^2 z(\mathbf{v}) \big[ (\mathbf{h}, \boldsymbol{\eta}), (\mathbf{k}, \boldsymbol{\xi}) \big] \\
+&= \mathbf{w}^\top \big( (\boldsymbol{\xi}^\top \otimes \mathbf{I}_n) \mathbf{h} + (\boldsymbol{\eta}^\top \otimes \mathbf{I}_n) \mathbf{k} \big) \\
+&= \mathbf{h}^\top ( \mathbf{I}_d \otimes \mathbf{w}) \, \boldsymbol{\xi} \; + \; \mathbf{k}^\top ( \mathbf{I}_d \otimes \mathbf{w} ) \, \boldsymbol{\eta},
+\end{align*}
+where we used the mixed-product rule for Kronecker products and the identity
+$$
+\mathbf{w}^\top (\boldsymbol{\xi}^\top \otimes \mathbf{I}_n) = \boldsymbol{\xi}^\top \otimes \mathbf{w}^\top.
+$$
+
+\textbf{5) Identification of the Hessian blocks.}
+By definition of the Hessian as a bilinear form,
+$$
+D^2\mathcal{L}(\mathbf{v}) \big[ (\mathbf{h}, \boldsymbol{\eta}), (\mathbf{k}, \boldsymbol{\xi}) \big]
+= \begin{pmatrix} 
+\mathbf{h}^\top & \boldsymbol{\eta}^\top \end{pmatrix}
+\begin{pmatrix}
+\mathbf{0}_{nd \times nd} & \frac{\partial^2 \mathcal{L}}{\partial \mathbf{u} \, \partial \boldsymbol{\beta}} \\[2pt]
+\frac{\partial^2\mathcal{L}}{\partial \boldsymbol{\beta} \, \partial \mathbf{u}} & \mathbf{0}_{d \times d}
+\end{pmatrix}
+\begin{pmatrix} 
+\mathbf{k} \\ \boldsymbol{\xi}
+\end{pmatrix}.
+$$
+Comparing with the expression obtained in Step~4 for arbitrary $(\mathbf{h}, \boldsymbol{\eta})$ and $(\mathbf{k}, \boldsymbol{\xi})$ forces
+$$
+\frac{\partial^2 \mathcal{L}}{\partial \mathbf{u} \, \partial \boldsymbol{\beta}}(\boldsymbol{\theta}_\star) = \mathbf{I}_d \otimes \mathbf{w},
+\qquad
+\frac{\partial^2 \mathcal{L}}{\partial \boldsymbol{\beta} \, \partial \mathbf{u}}(\boldsymbol{\theta}_\star) = \big( \mathbf{I}_d \otimes \mathbf{w} \big)^\top = \mathbf{I}_d \otimes \mathbf{w}^\top,
+$$
+and, because $Dz(\mathbf{v}) = \mathbf{0}_{n \times (nd + d)}$ (so no quadratic term survives in either $\mathbf{u}$ or $\boldsymbol{\beta}$ alone),
+$$
+\frac{\partial^2 \mathcal{L}}{\partial \mathbf{u} \, \partial \mathbf{u}}(\boldsymbol{\theta}_\star) = \mathbf{0}_{nd \times nd}, \qquad
+\frac{\partial^2 \mathcal{L}}{\partial \boldsymbol{\beta} \, \partial \boldsymbol{\beta}}(\boldsymbol{\theta}_\star) = \mathbf{0}_{d \times d}.
+$$
+This gives exactly the claimed block matrix.
+
+\textbf{6) Spectrum.}
+Let
+$$
+\mathbf{H} := \nabla_{(\mathbf{u}, \boldsymbol{\beta})}^2 \mathcal{L}(\boldsymbol{\theta}_\star) = 
+\begin{pmatrix}
+\mathbf{0}_{nd\times nd} & \ \ \mathbf{I}_d\otimes \mathbf{w} \\[4pt]
+\mathbf{I}_d \otimes \mathbf{w}^\top & \ \ \mathbf{0}_{d\times d}
+\end{pmatrix}.
+$$
+Then
+$$
+\mathbf{H}^2 = 
+\begin{pmatrix}
+(\mathbf{I}_d \otimes \mathbf{w})(\mathbf{I}_d \otimes \mathbf{w}^\top) & \mathbf{0}_{nd \times d}\\
+\mathbf{0}_{d \times nd} & (\mathbf{I}_d\otimes \mathbf{w}^\top)(\mathbf{I}_d\otimes \mathbf{w})
+\end{pmatrix}
+=
+\begin{pmatrix}
+\mathbf{I}_d \otimes (\mathbf{w} \mathbf{w}^\top) & \mathbf{0}_{nd \times d}\\
+\mathbf{0}_{d \times nd} & \mathbf{I}_d \otimes (\mathbf{w}^\top \mathbf{w})
+\end{pmatrix}.
+$$
+The eigenvalues of $\mathbf{w} \mathbf{w}^\top$ are $\|\mathbf{w}\|_2^2$ (multiplicity $1$) and $0$ (multiplicity $n-1$); the eigenvalues of $\mathbf{w}^\top \mathbf{w}$ equal $\|\mathbf{w}\|_2^2$ (scalar). Therefore the eigenvalues of $\mathbf{H}^2$ are
+$$
+\underbrace{\|\mathbf{w}\|_2^2, \ldots, \|\mathbf{w}\|_2^2}_{2d\ \text{times}},\quad
+\underbrace{0, \ldots, 0}_{d(n-1)\ \text{times}}.
+$$
+Because $\mathbf{H}$ is symmetric, its eigenvalues are the real square-roots of those of $\mathbf{H}^2$, namely
+$\pm \| \mathbf{w} \|_2$ (each with multiplicity $d$) and $0$ (with multiplicity $d(n-1)$).
+This is exactly the set stated in the lemma. 
+\end{proof}
+
+
+\begin{lemma}[Full Hessian at the witness: block form and spectrum]\label{lem:full-hessian-spectrum-compact}
+Let $n := | \mathcal{V} |$ and $d$ be the embedding width.  Write the parameter as
+$$
+\boldsymbol{\theta}
+\; = \; \big( (\mathbf{u}, \boldsymbol{\beta}), \, (\boldsymbol{\gamma}, \boldsymbol{\theta}') \big),
+\qquad
+\mathbf{u} = \mathrm{vec}_{n,d}(\mathbf{U}) \in \mathbb{R}^{nd}, \; \boldsymbol{\beta},\boldsymbol{\gamma} \in \mathbb{R}^{d}, \; \boldsymbol{\theta}' \in \mathbb{R}^{p'},
+$$
+so $p = nd + 2d + p'$.  Consider the witness point
+$$
+\boldsymbol{\theta}_\star = \mathbf{0}_p \quad
+(\mathbf{U} = \mathbf{0}_{n \times d},\ \boldsymbol{\beta} = \mathbf{0}_{d},\ \boldsymbol{\gamma}=\mathbf{0}_{d},\ \boldsymbol{\theta}'=\mathbf{0}_{d}).
+$$
+Let $\mathbf{b} := \tfrac1n \mathbf{1}_n$ and $\mathbf{w} := \mathbf{b} - \mathbf{p} \in \mathbb{R}^n$.
+Then the Hessian of the cross-entropy loss $\mathcal{L} (\boldsymbol{\theta})$ at $\boldsymbol{\theta}_\star$
+admits the block-diagonal decomposition
+$$
+\nabla^2 \mathcal{L}(\boldsymbol{\theta}_\star) \; = \;
+\begin{pmatrix}
+\mathbf{B} & \mathbf{0} \\[2pt]
+\mathbf{0} & \mathbf{0}
+\end{pmatrix},
+\qquad
+\mathbf{B} \; = \;
+\begin{pmatrix}
+\mathbf{0}_{nd\times nd} & \mathbf{I}_d \otimes \mathbf{w} \\[2pt]
+\mathbf{I}_d \otimes \mathbf{w}^\top & \mathbf{0}_{d\times d}
+\end{pmatrix}.
+$$
+Consequently,
+$$
+\mathrm{spec}\big( \nabla^2 \mathcal{L}(\boldsymbol{\theta}_\star) \big) \; = \; \Big\{ \underbrace{+\|\mathbf{w}\|_2, \ldots, +\|\mathbf{w}\|_2}_{d}, \ \underbrace{-\|\mathbf{w}\|_2, \ldots, -\|\mathbf{w}\|_2}_{d}, \
+\underbrace{0,\ldots,0}_{\,p-2d} \Big\}.
+$$
+\end{lemma}
+
+\begin{proof}
+Set $\boldsymbol{\gamma} = \mathbf{0}_d$.  Then the unembedding LayerNorm output is constant,
+$\mathrm{LN}(\mathbf{h}) \equiv \boldsymbol{\beta}$, so the logits equal $\mathbf{z} = \mathbf{U} \, \boldsymbol{\beta}$.
+Hence, in a neighborhood of $\boldsymbol{\theta}_\star$, the loss depends only on
+$(\mathbf{u}, \boldsymbol{\beta})$ and is independent of $(\boldsymbol{\gamma}, \boldsymbol{\theta}')$.
+
+We will apply \autoref{lem:zero-gate-loss-r} with the open set $\boldsymbol{\mathcal{U}} = \mathbb{R}^{nd+2d+p'}$, coordinates $\boldsymbol{\xi} = (\mathbf{u}, \boldsymbol{\beta})$ and $\boldsymbol{\psi} = (\boldsymbol{\gamma}, \boldsymbol{\theta}')$ and with $n = |\mathcal{V}|$, $r = d$. Define
+$$
+g(\boldsymbol{\xi}) := \mathrm{mat}_{n,d}(\mathbf{u}) \in \mathbb{R}^{n\times d}, \qquad h(\boldsymbol{\xi},\boldsymbol{\psi}) := \boldsymbol{\beta} \in \mathbb{R}^{d},
+$$
+so that
+$$
+f(\boldsymbol{\xi},\boldsymbol{\psi}) := g(\boldsymbol{\xi})\,h(\boldsymbol{\xi},\boldsymbol{\psi}) \;=\; \mathbf{U}\,\boldsymbol{\beta}\in\mathbb{R}^{n},
+$$
+and, with $\mathcal{L}(\mathbf{z}):=\mathrm{CrossEntropy}\big(\mathrm{softmax}(\mathbf{z}),\mathbf{p}\big)$,
+$$
+R(\boldsymbol{\xi}, \boldsymbol{\psi}) := \mathcal{L} \big( f(\boldsymbol{\xi}, \boldsymbol{\psi}) \big) = \mathrm{CrossEntropy} \big( \mathrm{softmax}(\mathbf{U}\boldsymbol{\beta}), \mathbf{p} \big).
+$$
+At the witness $\mathbf{v}_0 = (\boldsymbol{\xi}_0, \boldsymbol{\psi}_0)$ we have $g(\boldsymbol{\xi}_0)=\mathbf{0}_{n\times d}$, so by \autoref{lem:zero-gate-loss-r} all mixed and $\boldsymbol{\psi}$–only second partials of $R$ vanish at $\mathbf{v}_0$, i.e.
+$$
+\nabla^2 R(\mathbf{v}_0) =
+\begin{pmatrix}
+\nabla^2_{(\mathbf{u}, \boldsymbol{\beta})} R(\mathbf{v}_0) & \mathbf{0}\\
+\mathbf{0} & \mathbf{0}
+\end{pmatrix}.
+$$
+Identifying $R(\boldsymbol{\xi},\boldsymbol{\psi})\equiv \mathcal{L}(\boldsymbol{\theta})$ under the correspondence above yields
+$$
+\nabla^2 \mathcal{L}(\boldsymbol{\theta}_\star) =
+\begin{pmatrix}
+\nabla^2_{(\mathbf{u}, \boldsymbol{\beta})} \mathcal{L}(\boldsymbol{\theta}_\star) & \mathbf{0} \\
+\mathbf{0} & \mathbf{0}
+\end{pmatrix}.
+$$
+
+
+Combining, \autoref{lem:spectrum-union-block} and \autoref{lem:subhessian-spectrum}, we get that 
+\begin{align*}
+\mathrm{spec}\big(\nabla^2 \mathcal{L}(\boldsymbol\theta^\star)\big) &= \mathrm{spec}\big( \nabla^2_{(\mathbf{u}, \boldsymbol{\beta})} \mathcal{L}(\boldsymbol{\theta}_\star) \big)\ \cup\ \{ 0 \}^{\,d+p'} \\
+&= \Big\{ \pm\|\mathbf{w}\|_2\ \text{(each mult.\ $d$)},\ 0\ \text{(mult.\ $d(n-1)+d+p'$)}\Big\}.
+\end{align*}
+Since $p = nd + 2d + p'$, the multiplicity of $0$ equals $p - 2d$, which yields the claimed spectrum.
+\end{proof}
+
+\begin{theorem}[GD Jacobian is nondegenerate a.e.]\label{thm:gd-jacobian-ae-ref}
+Consider the setup of \autoref{thm:ac-gd}. 
+In particular, let $\phi:\mathbb R^p\to\mathbb R^p$ be the one-step GD map from that theorem:
+\begin{equation}\label{eq:gd-map1}
+    \phi(\boldsymbol\theta) = \boldsymbol{\theta} - \eta \,\nabla_{\boldsymbol{\theta}} \mathcal{L}_{\mathrm{s},\mathbf{p}}(\boldsymbol{\theta}),
+\end{equation}
+with stepsize $\eta \in (0,1)$.
+Then the critical set 
+$$
+\mathcal{C} \; := \; \{ \boldsymbol{\theta} \in \mathbb{R}^p : \det{D\phi(\boldsymbol{\theta})} = 0 \}
+$$
+has Lebesgue measure zero in $\mathbb R^p$. 
+\end{theorem}
+
+\begin{proof}
+By \autoref{prop:modules-ra}, \autoref{prop:log-real-analytic} and the closure properties of real analyticity,
+$\mathcal{L}_{\mathrm{s}, \mathbf{p}}$ is real-analytic; hence so are its gradient and Hessian.
+Therefore $\phi$ is real-analytic \cite[Thm.~1.1.15]{Lewis2014HolomorphicRealAnalyticCalculus} and
+$$
+D\phi(\boldsymbol{\theta}) = \mathbf{I}_p - \eta \, \nabla^2_{\boldsymbol{\theta}}\mathcal{L}_{\mathrm{s}, \mathbf{p}}(\boldsymbol{\theta}).
+$$
+Since the determinant is a polynomial in the entries, 
+$\boldsymbol{\theta} \mapsto \det{D\phi(\boldsymbol{\theta})}$ is real-analytic.
+
+It is not identically zero: at the witness $\boldsymbol{\theta}_\star = \mathbf{0}_p$,
+\autoref{lem:full-hessian-spectrum-compact} gives
+$$
+\mathrm{spec} \big( \nabla^2 \mathcal{L}(\boldsymbol{\theta}_\star) \big) = \{\underbrace{ +\| \mathbf{w} \|_2, \ldots, +\| \mathbf{w} \|_2}_{d},
+\underbrace{ -\| \mathbf{w} \|_2, \ldots, -\| \mathbf{w} \|_2}_{d},
+\underbrace{0, \ldots, 0}_{p-2d}\},
+\quad
+\mathbf{w} := \tfrac1n \mathbf{1} - \mathbf{p} .
+$$
+Hence the eigenvalues of $D\phi(\boldsymbol{\theta}_\star) = \mathbf{I}_p - \eta \, \nabla^2 \mathcal{L}(\boldsymbol{\theta}_\star)$ are
+$$
+\underbrace{1 - \eta \| \mathbf{w} \|_2}_{d \, \text{times}}, \quad
+\underbrace{1 + \eta \| \mathbf{w} \|_2}_{d \, \text{times}}, \quad
+\underbrace{1}_{p - 2d \, \text{times}},
+$$
+so
+$$
+\det D\phi(\boldsymbol\theta^\star) = \left( 1 -\eta^2\|\mathbf{w}\|_2^2 \right)^d > 0.
+$$ 
+Thus $\det D\phi$ is a nontrivial real-analytic function.
+By \autoref{thm:zero-measure-roots}, its zero set has Lebesgue measure $0$.
+\end{proof}
+
+
+
+\subsubsection{Gradient Descent preserves absolute continuity}\label{subsec:gd-preserves-ac}
+
+
+\begin{lemma}[Countable chart cover of $\mathbb{R}^p\setminus\mathcal{C}$]\label{lem:countable-chart-cover}
+Consider the setup of \autoref{thm:ac-gd}. 
+In particular, let $\phi:\mathbb R^p\to\mathbb R^p$ be the one-step GD map from that theorem:
+\begin{equation}\label{eq:gd-map2}
+    \phi(\boldsymbol\theta) = \boldsymbol{\theta} - \eta \,\nabla_{\boldsymbol{\theta}} \mathcal{L}_{\mathrm{s},\mathbf{p}}(\boldsymbol{\theta}),
+\end{equation}
+with stepsize $\eta \in (0,1)$, and the measure-zero critical-set (\autoref{thm:gd-jacobian-ae-ref}):
+$$
+\mathcal{C} \; := \; \{ \boldsymbol{\theta} \in \mathbb{R}^p : \det{D\phi(\boldsymbol{\theta})} = 0 \}.
+$$
+Then there exist open sets $(\boldsymbol{\mathcal{U}}_k)_{k \geq 1}$ covering $\boldsymbol{\mathcal{X}} := \mathbb{R}^p \setminus \mathcal{C}$ such that, for each $k$,
+the restriction $\phi_k := \phi|_{\boldsymbol{\mathcal{U}}_k} : \boldsymbol{\mathcal{U}}_k \to \boldsymbol{\mathcal{V}}_k := \phi(\boldsymbol{\mathcal{U}}_k)$ is a $C^1$ diffeomorphism with $C^1$ inverse
+$\psi_k := \phi_k^{-1}$.
+\end{lemma}
+\begin{proof} $\newline$
+
+\vspace{-10px}
+\textbf{1)} $\boldsymbol{\mathcal{X}}$ \textbf{is open:}
+By \autoref{prop:modules-ra}, \autoref{prop:log-real-analytic} and the closure rules of real-analyticity,
+$\mathcal{L}_{\mathrm{s}, \mathbf{p}}$ is $C^2$, hence $\phi$ is $C^1$.
+The map $\boldsymbol{\theta} \mapsto D\phi(\boldsymbol{\theta})$ is continuous, and the determinant is a continuous polynomial in the entries, so $g(\boldsymbol{\theta}) := \det D\phi(\boldsymbol{\theta})$ is continuous.
+Therefore $\mathcal{C} = g^{-1}(\{ 0 \})$ is closed \cite[Thm.~4.8]{RudinPM} and $\boldsymbol{\mathcal{X}} = \mathbb{R}^p \setminus \mathcal{C}$ is open.
+
+\smallskip
+\textbf{2) Local diffeomorphisms by the Inverse Function Theorem:}
+Fix $\boldsymbol{\theta} \in \boldsymbol{\mathcal{X}}$. Then $g(\boldsymbol{\theta}) \neq 0$, so by the Inverse Function Theorem
+(\autoref{thm:inverse-function}) there exist open neighborhoods
+$\boldsymbol{\mathcal{U}}_{\boldsymbol{\theta}} \ni \boldsymbol{\theta}$ and $\boldsymbol{\mathcal{V}}_{\boldsymbol{\theta}} \ni \phi(\boldsymbol{\theta})$ such that
+$$
+\phi_{\boldsymbol{\theta}} := \phi|_{\boldsymbol{\mathcal{U}}_{\boldsymbol{\theta}}} : \boldsymbol{\mathcal{U}}_{\boldsymbol{\theta}} \to \boldsymbol{\mathcal{V}}_{\boldsymbol{\theta}}
+$$
+is a $C^1$ diffeomorphism with $C^1$ inverse $\psi_{\boldsymbol{\theta}} := \phi_{\boldsymbol{\theta}}^{-1}$.
+Moreover,
+$$
+D\psi_{\boldsymbol{\theta}} (\phi(\mathbf{x})) = \big( D\phi(\mathbf{x}) \big)^{-1} \qquad \forall \, \mathbf{x} \in \boldsymbol{\mathcal{U}}_{\boldsymbol{\theta}}.
+$$
+In particular $D\phi(\mathbf{x})$ is invertible for all $\mathbf{x} \in \boldsymbol{\mathcal{U}}_{\boldsymbol{\theta}}$, whence $\boldsymbol{\mathcal{U}}_{\boldsymbol{\theta}} \subset \boldsymbol{\mathcal{X}}$.
+Thus $\{ \boldsymbol{\mathcal{U}}_{\boldsymbol{\theta}} \}_{\boldsymbol{\theta} \in \boldsymbol{\mathcal{X}}}$ is an open cover of $\boldsymbol{\mathcal{X}}$ by IFT charts.
+
+\smallskip
+\textbf{3) Select a countable subcover:}
+By \autoref{prop:std-Rp}(3), $\mathbb{R}^p$ is second-countable; subspaces of second-countable spaces are second-countable, hence $\boldsymbol{\mathcal{X}}$ is second-countable. By \autoref{prop:std-Rp}(4),
+every open cover of a second-countable space admits a countable subcover. Therefore there exist
+points $\boldsymbol{\theta}_1, \boldsymbol{\theta}_2, \ldots \in \boldsymbol{\mathcal{X}}$ such that $\boldsymbol{\mathcal{X}} = \bigcup_{k=1}^{\infty} \boldsymbol{\mathcal{U}}_{\boldsymbol{\theta}_k}$.
+
+Set $\boldsymbol{\mathcal{U}}_k := \boldsymbol{\mathcal{U}}_{\boldsymbol{\theta}_k}$, $\boldsymbol{\mathcal{V}}_k := \boldsymbol{\mathcal{V}}_{\boldsymbol{\theta}_k}$, and $\phi_k := \phi|_{\boldsymbol{\mathcal{U}}_k} = \phi_{\boldsymbol{\theta}_k}$, $\psi_k := \psi_{\boldsymbol{\theta}_k}$.
+Each $\phi_k$ is a $C^1$ diffeomorphism with $C^1$ inverse $\psi_k$ by Step~2.
+This yields the desired countable chart cover of $\boldsymbol{\mathcal{X}}$.
+\end{proof}
+
+
+\begin{theorem}[Change of Variables {\citealt[Thm.~2.47(b)]{Folland1999-ad}}]\label{thm:COV-cite}
+Let $\boldsymbol{\mathcal{U}}, \boldsymbol{\mathcal{V}} \subseteq \mathbb{R}^p$ be open and $\psi : \boldsymbol{\mathcal{V}} \to \boldsymbol{\mathcal{U}}$ a $C^1$ diffeomorphism. If $\boldsymbol{\mathcal{E}} \subseteq \boldsymbol{\mathcal{V}}$ is Lebesgue measurable, then
+$$
+\mathrm{Leb}_p \big( \psi(\boldsymbol{\mathcal{E}}) \big) = \int_{\boldsymbol{\mathcal{E}}} \big| \det{D\psi(\mathbf{y})} \big| \, d\mathbf{y}.
+$$
+\end{theorem}
+
+
+\begin{lemma}[Pre-images of null sets are null]\label{lem:preimage-null-null}
+Consider the setup of \autoref{thm:ac-gd}, in particular the $C^1$ gradient descent map:
+$$
+\phi(\boldsymbol{\theta}) = \boldsymbol{\theta} - \eta \nabla_{\boldsymbol{\theta}} \mathcal{L}_{\mathrm{s}, \mathbf{p}}(\boldsymbol{\theta}),\qquad \eta\in(0,1),
+$$
+and its critical set $\mathcal{C} := \{ \boldsymbol{\theta} \in \mathbb{R}^p : \det{D\phi(\boldsymbol{\theta})} = 0 \}$.
+Then, for every measurable $\boldsymbol{\mathcal{A}} \subseteq \mathbb{R}^p$,
+$$
+\mathrm{Leb}_p(\boldsymbol{\mathcal{A}}) = 0 \implies \mathrm{Leb}_p \big( \phi^{-1}(\boldsymbol{\mathcal{A}}) \big)=0.
+$$
+\end{lemma}
+\begin{proof}
+Let $\boldsymbol{\mathcal{X}} = \mathbb{R}^p \setminus \mathcal{C}$ and decompose the pre-image:
+$$
+\phi^{-1}(\boldsymbol{\mathcal{A}})
+=
+\big( \phi^{-1}(\boldsymbol{\mathcal{A}}) \cap \mathcal{C} \big)  \cup \big( \phi^{-1}(\boldsymbol{\mathcal{A}}) \cap \boldsymbol{\mathcal{X}} \big).
+$$
+The first set is contained in $\mathcal{C}$, a measure zero set (\autoref{thm:gd-jacobian-ae-ref}), hence has $\mathrm{Leb}_p$–measure $0$.
+By \autoref{lem:countable-chart-cover}, cover $\boldsymbol{\mathcal{X}}$ by countably many charts $\{ \boldsymbol{\mathcal{U}}_k \}$ on which $\phi_k := \phi|_{\boldsymbol{\mathcal{U}}_k}$ is a $C^1$ diffeomorphism onto $\boldsymbol{\mathcal{V}}_k := \phi(\boldsymbol{\mathcal{U}}_k)$ with inverse $\psi_k \in C^1(\boldsymbol{\mathcal{V}}_k \, ; \, \boldsymbol{\mathcal{U}}_k)$.
+Then, it holds that:
+$$
+\phi^{-1}(\boldsymbol{\mathcal{A}}) \cap \boldsymbol{\mathcal{U}}_k =
+\psi_k \big(\boldsymbol{\mathcal{A}} \cap \boldsymbol{\mathcal{V}}_k\big).
+$$
+Since $\mathrm{Leb}_p(\boldsymbol{\mathcal{A}}) = 0$ and both $\boldsymbol{\mathcal{A}}$ and $\boldsymbol{\mathcal{V}}_k$ are measurable, $\boldsymbol{\mathcal{A}} \cap \boldsymbol{\mathcal{V}}_k$ is measurable and has measure $0$.
+By \autoref{thm:COV-cite} applied to $\psi_k$ with $\boldsymbol{\mathcal{E}} = \boldsymbol{\mathcal{A}} \cap \boldsymbol{\mathcal{V}}_k$,
+$$
+\mathrm{Leb}_p \big(\psi_k(\boldsymbol{\mathcal{A}} \cap \boldsymbol{\mathcal{V}}_k)\big) =
+\int_{\boldsymbol{\mathcal{A}} \cap \boldsymbol{\mathcal{V}}_k} \big| \det{D\psi_k(\mathbf{y})} \big| \, d\mathbf{y}
+=0.
+$$
+Therefore, each $\phi^{-1}(\boldsymbol{\mathcal{A}}) \cap \boldsymbol{\mathcal{U}}_k$ is null and because a countable union of null sets is null, it holds that:
+$$
+\mathrm{Leb}_p \big(\phi^{-1}(\boldsymbol{\mathcal{A}})\big) = 0.
+$$
+\end{proof}
+
+
+\begin{theorem}[Preservation of absolute continuity under one GD step]\label{thm:ac-gd}
+Fix a finite vocabulary $\mathcal{V}$, a context bound $K\in\mathbb{N}$, and the Transformer language model $f$ of \autoref{def:tlm}. For any sample $(\mathrm{s},\mathbf{p})\in \mathcal{V}^{\le K}\times\Delta^{|\mathcal{V}|-1}$ and any learning rate $\eta\in(0,1)$, let $\phi : \mathbb{R}^p \to \mathbb{R}^p$ be the gradient-descent update, defined as:
+$$
+\phi(\boldsymbol\theta)\;=\;\boldsymbol\theta\;-\;\eta\,\nabla_{\boldsymbol\theta}\mathcal{L}_{\mathrm{s},\mathbf{p}}(\boldsymbol\theta),
+$$
+where $\mathcal{L}_{\mathrm{s}, \mathbf{p}} : \mathbb{R}^p \to \mathbb{R}$ is the standard 
+Cross Entropy loss:
+$$
+\mathcal{L}_{\mathrm{s},\mathbf{p}}(\boldsymbol\theta)
+=\mathrm{CrossEntropy}\big(f(\mathrm{s} \, ; \,\boldsymbol\theta),\mathbf{p}\big).
+$$
+Then, gradient-descent preserves absolute continuity: for every absolutely continuous probability law $\mu$ on $\mathbb{R}^p$, its image under $\phi$ remains absolutely continuous:
+$$
+\phi_{\#}\mu \;\ll\; \mathrm{Leb}_p.
+$$
+
+Therefore, the updated parameters $\boldsymbol{\theta}' :=\phi(\boldsymbol{\theta})$ are absolutely continuous.
+
+\end{theorem}
+\begin{proof}
+By \autoref{prop:modules-ra} and closure properties, $\mathcal{L}_{\mathrm{s},\mathbf{p}}$ is $C^2$, hence $\phi\in C^1$ and is Borel-measurable.
+From \autoref{thm:gd-jacobian-ae-ref} the critical set
+\[
+\mathcal{C} \;:=\; \{\boldsymbol\theta\in\mathbb{R}^p:\det D\phi(\boldsymbol\theta)=0\}
+\]
+has $\mathrm{Leb}_p$-measure $0$. Therefore, the hypothesis of \autoref{lem:preimage-null-null} holds, and we have the property:
+\begin{equation*}
+\mathrm{Leb}_p(\boldsymbol{\mathcal{A}})=0
+\quad\Longrightarrow\quad
+\mathrm{Leb}_p\big(\phi^{-1}(\boldsymbol{\mathcal{A}})\big)=0
+\qquad\text{for every measurable } \boldsymbol{\mathcal{A}}\subseteq\mathbb{R}^p. \tag{$\dagger$}
+\end{equation*}
+Let $\boldsymbol{\mathcal{A}}$ be any Borel set with $\mathrm{Leb}_p(\boldsymbol{\mathcal{A}})=0$. Then
+\[
+\phi_\#\mu(\boldsymbol{\mathcal{A}})
+\;=\;
+\mu\big(\phi^{-1}(\boldsymbol{\mathcal{A}})\big)
+\;=\;0,
+\]
+because $\mu\ll \mathrm{Leb}_p$ and $\mathrm{Leb}_p\big(\phi^{-1}(\boldsymbol{\mathcal{A}})\big)=0$ by $(\dagger)$. Since this holds for every $\mathrm{Leb}_p$-null set $\boldsymbol{\mathcal{A}}$, we conclude $\phi_\#\mu\ll \mathrm{Leb}_p$.
+\end{proof}
+
+
+\begin{corollary}[Preservation of absolute continuity under finitely many GD steps]\label{cor:finite-steps-ac}
+Fix a finite vocabulary $\mathcal{V}$, a context bound $K\in\mathbb{N}$, and the Transformer language model $f$ of \autoref{def:tlm}.
+For $t=1,\ldots,T$, let $(\mathrm{s}_t,\mathbf{p}_t)\in \mathcal{V}^{\le K}\times\Delta^{|\mathcal{V}|-1}$ and $\eta_t\in(0,1)$, and define the $t$-th GD update
+\[
+\phi_t(\boldsymbol\theta)\;=\;\boldsymbol\theta\;-\;\eta_t\,\nabla_{\boldsymbol\theta}\mathcal{L}_{\mathrm{s}_t,\mathbf{p}_t}(\boldsymbol\theta),
+\qquad
+\mathcal{L}_{\mathrm{s}_t,\mathbf{p}_t}(\boldsymbol\theta)
+=\mathrm{CrossEntropy}\big(f(\mathrm{s}_t \, ; \,\boldsymbol\theta),\mathbf{p}_t\big).
+\]
+Let the $T$-step update map be the composition
+\[
+\Phi \;:=\; \phi_T\circ\cdots\circ \phi_1 \;:\; \mathbb{R}^p \to \mathbb{R}^p.
+\]
+Then, for every absolutely continuous probability law $\mu$ on $\mathbb{R}^p$, its image under $\Phi$ remains absolutely continuous:
+\[
+\Phi_\#\mu \;\ll\; \mathrm{Leb}_p.
+\]
+Equivalently, if $\boldsymbol\theta^{(0)}\sim\mu$ with $\mu\ll\mathrm{Leb}_p$ and
+\[
+\boldsymbol\theta^{(t+1)} \;=\; \phi_t\big(\boldsymbol\theta^{(t)}\big), \quad t=0,\ldots,T-1,
+\]
+then the $T$-step parameters $\boldsymbol\theta^{(T)}=\Phi\big(\boldsymbol\theta^{(0)}\big)$ are absolutely continuous.
+\end{corollary}
+\begin{proof}
+Since the result of \autoref{lem:preimage-null-null} holds for each $\phi_t$, for any null set $\boldsymbol{\mathcal{A}}$, repeated preimages remain null:
+\[
+\mathrm{Leb}_p\big((\phi_T\circ\cdots\circ \phi_1)^{-1}(\boldsymbol{\mathcal{A}})\big)=0.
+\]
+The same argument as in the proof of \autoref{thm:ac-gd} then yields the claim.
+\end{proof}
+
+
+
+

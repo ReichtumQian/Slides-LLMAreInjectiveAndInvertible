@@ -1,0 +1,47 @@
+\section{Introduction}
+\label{sec:intro}
+
+\begin{wrapfigure}[12]{r}{0.45\textwidth}
+    \centering
+    \vspace{-0.5cm}
+    \begin{overpic}[width=\linewidth]{figures/teaser.pdf}
+        % \put(13, 45){$\mathcal{V}^{\leq K}$ }
+        \put(52, 42){\small LLM}
+        \put(51, 16.5){\small \textsc{SipIt}}
+    \end{overpic}
+    \caption{The map from prompts to latent space is injective. \textsc{SipIt} inverts it.}
+    \label{fig:teaser}
+\end{wrapfigure}
+A core question in understanding large language models is whether their internal representations faithfully preserve the information in their inputs. Since Transformer architectures rely heavily on non-linearities, normalization, and many-to-one attentions mechanisms, it is often assumed that they discard information: different inputs could collapse to the same hidden state, making exact recovery of the input impossible. This view motivates concerns around transparency, robustness, and safe deployment, as it suggests that the link between text and representation is inherently {\em lossy}.
+
+In this paper, we show that this intuition is misleading. Despite their apparent complexity, standard decoder-only Transformer language models (seen as maps from prompts to hidden states) are in fact \textbf{almost-surely injective}; for essentially all parameter settings and during the course of training, different prompts yield different last-token representations (e.g., see \autoref{fig:teaser}). 
+
+Building upon this property, we further provide a practical algorithm, \textsc{SipIt}, that reconstructs the \emph{exact} input from hidden activations. To our knowledge, it is the first to guarantee exact recovery in provable linear time (worst case bound), often faster in practice, turning injectivity from a theoretical property into an operational tool.
+
+\paragraph{Our approach.}
+%
+To establish our result, we take a rigorous mathematical view of Transformers as functions. The key idea is that their components (embeddings, LayerNorm, causal attention, MLPs, and residual wiring) are smooth and structured enough that the model, as a whole, behaves predictably with respect to its parameters. Using tools from real analysis, we show that collisions (two different prompts producing the exact same representation) can only occur on a set of parameter values that has measure zero; that is, they are mathematical \emph{exceptions} rather than possibilities one should expect in practice. Moreover, we prove that common training procedures (gradient descent with standard step sizes) never move parameters into this exceptional set. In layman's terms, almost all models at initialization are injective, and training preserves this property.
+
+Technically, our proofs rely on two ingredients. First, we establish that Transformers are real-analytic functions of their parameters, which allows us to reason precisely about when and where collisions could occur. Second, we construct parameter settings where no two prompts collide, and show that gradient descent (GD) does not collapse such separation, i.e., collisions remain a measure-zero event. The end result is a finite-horizon \emph{guarantee}: after any fixed number of training steps, and under mild assumptions, injectivity holds with probability one. We provide complete formal proofs of these statements.
+
+\paragraph{Main result.} %\emph{(Finite-horizon almost-sure injectivity.)} 
+Our central finding is that causal decoder-only Transformer language models are injective almost surely. Formally, consider one such model with embedding width $d$, at least one attention head per block, real-analytic components, finite vocabulary $\mathcal{V}$, and finite context length $K$. Initialize its parameters $\boldsymbol\theta$ at random, using any distribution that has a density\footnote{Put simply, parameters are not drawn from a degenerate or hand-crafted set.} (such as Gaussian, uniform, or Xavier/Glorot), %from any distribution absolutely continuous with respect to Lebesgue measure 
+%
+and train for any finite number $T$ of GD steps with step sizes in $(0,1)$. Then, with probability one over the random initialization,
+\[
+\mathrm{s}\neq \mathrm{s}'
+\quad\Longrightarrow\quad
+\mathbf r(\mathrm{s} \,;\, \boldsymbol\theta_T)\neq \mathbf r(\mathrm{s}' \,;\, \boldsymbol\theta_T)\,,
+\]
+i.e., the map from prompts $\mathrm{s}$ to \emph{last-token} representations $\mathbf r(\mathrm{s} \,;\, \boldsymbol\theta_T)$ is injective across all prompts in $\mathcal V^{\le K}$. 
+%
+In short, collisions in practical settings form a measure-zero set, and neither initialization nor training will ever place a model inside that set.
+
+
+
+\paragraph{Significance.}
+Our result shows that in standard decoder-only Transformers, different prompts almost surely yield different last-token representations across all practically relevant parameter settings and training procedures. The guarantee is both \emph{generic} (it fails only on a measure-zero set of pathological parameters) and \emph{practical} (it holds at finite width, depth, and training time under common initializations).
+
+Conceptually, we replace a long-assumed property with a rigorous theorem, showing that injectivity is not an asymptotic idealization but a structural consequence of the architecture itself. Technically, our analytic framework pinpoints when collisions can arise (through deliberate non-analytic choices such as quantization or tying), and clarifies that otherwise the model is inherently lossless. Importantly, it establishes that last-token states almost everywhere \emph{identify} the input. 
+
+Finally, we turn this theoretical guarantee into an operational tool: our algorithm \textsc{SipIt} uses gradient-based reconstruction to recover prompts \textit{exactly} from internal activations, efficiently and with provable \emph{linear-time} guarantees. This confirms empirically that collisions do not occur in practice. Beyond transparency and safety, this elevates \emph{invertibility} to a first-class property of Transformer language models, enabling stronger interpretability, probing, and causal analyses.
