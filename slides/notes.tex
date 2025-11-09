@@ -284,20 +284,53 @@
 \end{frame}
 
 \begin{frame}{Key Idea: Causal Structure}
-  \textbf{Observation:} Hidden state at position $t$ depends only on:
-  \begin{itemize}
-    \item Prefix: $\langle \mathrm{s}_1, \ldots, \mathrm{s}_{t-1} \rangle$
-    \item Current token: $\mathrm{s}_t$
-  \end{itemize}
+  \textbf{Observation:} Causal attention makes each hidden state depend only on the prefix and current token:
+  \[
+  \mathbf{h}_t = F(\mathrm{s}_t \,;\, \mathrm{s}_1,\dots,\mathrm{s}_{t-1})\,.
+  \]
 
-  \vspace{1em}
+  \vspace{0.6em}
+  \textbf{Sequential recovery:}
+  The hidden states are $\mathbf{h}_1, \mathbf{h}_2, \cdots, \mathbf{h}_T$, then
+  \[
+  \begin{aligned}
+    t=1: &\quad \mathbf{h}_1 \Rightarrow \mathrm{s}_1 \\
+    t=2: &\quad (\mathrm{s}_1,\, \mathbf{h}_2) \Rightarrow \mathrm{s}_2 \\
+    &\quad \vdots \\
+    t=T: &\quad (\mathrm{s}_{<T},\, \mathbf{h}_T) \Rightarrow \mathrm{s}_T
+  \end{aligned}
+  \]
+
+  \vspace{0.6em}
   \textbf{Strategy:}
   \begin{enumerate}
-    \item Recover tokens sequentially from left to right
-    \item At position $t$: given recovered prefix, try each vocab token
-    \item Check which candidate produces matching hidden state
-    \item Local injectivity ensures unique match
+    \item Reconstruct tokens left-to-right, maintaining the recovered prefix.
+    \item At step $t$, enumerate candidates consistent with the prefix.
+    \item Compare $F(v;\text{prefix})$ to $\widehat{\mathbf{h}}_t$; injectivity guarantees exactly one match.
   \end{enumerate}
+\end{frame}
+
+\begin{frame}{Gradient-Guided Policy (Why \textsc{SipIt} is Fast)}
+
+  \textbf{Gradient-Guided Policy:} Let $F(\mathbf{e}; \pi, t)$ be the hidden state produced by running the decoder (up to layer $\ell$) on prefix $\pi$ with a continuous proxy embedding $\mathbf{e}$ at position $t$.
+  \[
+    \mathcal{L}(\mathbf{e}) = \tfrac12 \|F(\mathbf{e}; \pi, t) - \widehat{\mathbf{h}}_t\|_2^2
+  \]
+  \[
+    \mathbf{e}^{(j)} \leftarrow \mathbf{e}^{(j-1)} - \gamma \nabla_{\mathbf{e}} \mathcal{L}
+  \]
+  where $\pi=\langle \mathrm{s}_1,\dots,\mathrm{s}_{t-1} \rangle$ is the prompt,
+  and $\widehat{\mathbf{h}}_t$ is the observed hidden state at position $t$.
+
+  \vspace{0.4em}
+  \textbf{Nearest-neighbor verification}
+  \begin{itemize}
+    \item Rank tokens by $\|\mathbf{E}_v - \mathbf{e}^{(j)}\|_2$ and test nearest first.
+    \item Usually locks onto the correct token after a handful of proposals (vs full vocabulary scan).
+  \end{itemize}
+
+  \vspace{0.4em}
+  \textbf{Result:} $10\text{--}100\times$ fewer trials while keeping the same linear-time worst-case guarantee.
 \end{frame}
 
 \begin{frame}[fragile]{The \textsc{SipIt} Algorithm}
@@ -320,22 +353,7 @@
     \end{algorithmic}
   \end{algorithm}
   Here $\ell$ is the layer index, $T$ is the sequence length, and $|\mathcal{V}|$ is the vocabulary size.
-\end{frame}
 
-\begin{frame}{Theoretical Guarantee}
-  \begin{theorem}[Correctness of \textsc{SipIt}]
-    Given observed hidden states $\widehat{\mathbf{H}}^{(\ell)}$, \textsc{SipIt} recovers
-    the true input sequence with probability one in at most $T \cdot |\mathcal{V}|$ steps.
-  \end{theorem}
-
-  \vspace{1em}
-  \textbf{Key points:}
-  \begin{itemize}
-    \item Worst-case linear time bound
-    \item Exact recovery (not approximate)
-    \item Works at any layer $\ell$
-    \item In practice: often much faster with gradient-guided policy
-  \end{itemize}
 \end{frame}
 
 % ============================================================
