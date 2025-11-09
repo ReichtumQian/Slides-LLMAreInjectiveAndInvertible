@@ -39,7 +39,7 @@
 % \tiny\bibliographystyle{plain}
 
 \author{Yixiao Qian}
-\title{Injectivity and Surjectivity of Large Language Models}
+\title{Large Models are Injective and Hence Invertible}
 % \subtitle{Paper Reading Seminar}
 \institute{School of Mathematics, Zhejiang University}
 \date{\today}
@@ -91,12 +91,15 @@
 
 \begin{frame}{Background: LLM Representations}
 
-  LLMs use Transformer architectures and 
-  map input sequences to hidden representations.
-
-  \textbf{Key Question}: 
-  Are these representations \textbf{lossless}?
-  Does different inputs collapse to same representation?
+  \begin{itemize}
+    \item LLMs use Transformer architectures and 
+      map input sequences to hidden representations.
+    \item Transformer architectures rely heavily on non-linearities,
+      normalization, and many-to-one attentions.
+    \item \textbf{Key Question}: 
+      Are these representations \textbf{lossless}?
+      Does different inputs collapse to same representation?
+  \end{itemize}
 
   \begin{figure}
     \centering
@@ -109,8 +112,9 @@
 \begin{frame}{Research Question}
   \begin{columns}
     \begin{column}{0.5\textwidth}
-      \begin{block}{Central Question}
-        Can different prompts map to the same hidden state in Transformer LMs?
+      \begin{block}{Common Assumption}
+        It is often assumed that attention \textbf{discards information}:
+        different inputs could collapse to the same hidden state.
       \end{block}
 
       \vspace{0.5em}
@@ -123,8 +127,6 @@
       \end{enumerate}
 
       \vspace{0.5em}
-
-      \small{\textbf{Implications:} Transparency, interpretability, safe deployment}
 
     \end{column}
 
@@ -139,14 +141,54 @@
 
 \end{frame}
 
+\begin{frame}{Approach Overview}
+  \textbf{Analytic viewpoint}
+  \begin{itemize}
+    \item Model Transformers as \textbf{smooth functions of parameters} (embeddings, LayerNorm, attention, MLPs, residuals).
+    \item Use real-analyticity to show \textbf{collision sets have measure zero}.
+    \item Gradient descent never enters the exceptional set, so \textbf{injectivity persists during training}.
+  \end{itemize}
+
+  \vspace{0.5em}
+
+  \textbf{Empirical evidence}
+  \begin{itemize}
+    \item 5B+ prompt pairs across GPT-2, Gemma, Llama, Mistral, Phi families: \textbf{zero collisions}.
+    \item Exhaustive GPT-2 stress test (343B comparisons) keeps \textbf{pairwise distances well above $0$}.
+    \item \textsc{SipIt} reconstructs prompts exactly in linear time, confirming \textbf{invertibility in practice}.
+  \end{itemize}
+
+\end{frame}
+
 % ============================================================
 % Section 2: Main Theoretical Results - Injectivity
 % ============================================================
 \section{Theoretical Results: Injectivity}
 
+\begin{frame}{Last-Token Hidden State}
+  \begin{columns}
+    \begin{column}{0.52\textwidth}
+      \begin{itemize}
+        \item Prompt $\mathrm{s} = (t_1,\dots,t_\ell)$ feeds $\ell$ tokens into each of the $L$ decoder blocks; every block outputs a length-$\ell$ matrix $H^{(l)}$.
+        \item The final block produces $H^{(L)} = (h^{(L)}_1,\dots,h^{(L)}_\ell)$; the last vector $h^{(L)}_\ell$ is the last-token hidden state $\mathbf{r}(\mathrm{s}; \boldsymbol{\theta})$.
+        \item $\mathbf{r}$ is the input to the LM head/logits—if two prompts share it, the model cannot distinguish them.
+        \item Therefore injectivity of $\mathrm{s} \mapsto \mathbf{r}(\mathrm{s}; \boldsymbol{\theta})$ is the property we analyze and test.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \begin{figure}
+        \centering
+        \includegraphics[width=\textwidth]{png/Decoder-Only.png}
+        \caption{Last-token state is the decoder output feeding the LM head.}
+      \end{figure}
+    \end{column}
+  \end{columns}
+\end{frame}
+
 \begin{frame}{Key Insight: Real Analyticity}
   \begin{columns}
     \begin{column}{0.58\textwidth}
+      Let $\mathrm{s} \in \mathcal{V}^{\le K}$ be a prompt, $\boldsymbol{\theta}$ the Transformer parameters, and $\mathbf{r}(\mathrm{s}; \boldsymbol{\theta})$ the last-token hidden state.
       \begin{theorem}[Transformers are real-analytic]
         For embedding dimension $d$, context length $K$, and real-analytic activation (e.g., GELU, tanh),
         the map $(\mathrm{s}, \boldsymbol{\theta}) \mapsto \mathbf{r}(\mathrm{s}; \boldsymbol{\theta}) \in \mathbb{R}^d$
@@ -156,9 +198,9 @@
       \vspace{0.5em}
       \textbf{Why it matters:}
       \begin{itemize}
-        \item Real-analytic functions have measure-zero collision sets
-        \item Either identically zero or zero set has measure zero
-        \item Standard initializations avoid measure-zero sets with probability 1
+        \item Real-analytic functions have measure-zero collision sets.
+        \item Either identically zero or zero set has measure zero.
+        \item Standard initializations avoid measure-zero sets with probability 1.
       \end{itemize}
     \end{column}
     \begin{column}{0.4\textwidth}
