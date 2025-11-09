@@ -39,7 +39,7 @@
 % \tiny\bibliographystyle{plain}
 
 \author{Yixiao Qian}
-\title{Large Language Models are Injective and Invertible}
+\title{Injectivity and Surjectivity of Large Language Models}
 % \subtitle{Paper Reading Seminar}
 \institute{School of Mathematics, Zhejiang University}
 \date{\today}
@@ -131,7 +131,7 @@
     \begin{column}{0.48\textwidth}
       \begin{figure}
         \centering
-        \includegraphics[width=\textwidth]{../arXiv-2510.15511v3/figures/teaser.pdf}
+        \includegraphics[width=\textwidth]{../injectivity/figures/teaser.pdf}
         \caption{The map from prompts to latent space is injective. \textsc{SipIt} inverts it.}
       \end{figure}
     \end{column}
@@ -164,7 +164,7 @@
     \begin{column}{0.4\textwidth}
       \begin{figure}
         \centering
-        \includegraphics[width=\textwidth]{../arXiv-2510.15511v3/figures/real_analytic_fns.png}
+        \includegraphics[width=\textwidth]{../injectivity/figures/real_analytic_fns.png}
         \caption{Two real-analytic functions and their difference. Zero sets form thin curves (measure zero).}
       \end{figure}
     \end{column}
@@ -308,7 +308,7 @@
 
   \begin{figure}
     \centering
-    \includegraphics[width=0.85\textwidth]{../arXiv-2510.15511v3/figures/combined_swarm_boxplot.pdf}
+    \includegraphics[width=0.85\textwidth]{../injectivity/figures/combined_swarm_boxplot.pdf}
     \caption{Minimum distances between last-token states across layers. All distances $\gg 10^{-6}$.}
   \end{figure}
 \end{frame}
@@ -335,7 +335,7 @@
     \begin{column}{0.5\textwidth}
       \begin{figure}
         \centering
-        \includegraphics[width=\textwidth]{../arXiv-2510.15511v3/figures/exhaustive-gpt2-boxplot.pdf}
+        \includegraphics[width=\textwidth]{../injectivity/figures/exhaustive-gpt2-boxplot.pdf}
         \caption{Exhaustive test on GPT-2: all minima stay well above collision threshold.}
       \end{figure}
     \end{column}
@@ -347,14 +347,14 @@
     \begin{column}{0.48\textwidth}
       \begin{figure}
         \centering
-        \includegraphics[width=\textwidth]{../arXiv-2510.15511v3/figures/gpt2-distances-vs-length.pdf}
+        \includegraphics[width=\textwidth]{../injectivity/figures/gpt2-distances-vs-length.pdf}
         \caption{GPT-2: distances grow at short lengths then stabilize.}
       \end{figure}
     \end{column}
     \begin{column}{0.48\textwidth}
       \begin{figure}
         \centering
-        \includegraphics[width=\textwidth]{../arXiv-2510.15511v3/figures/gemma-3-1b-pt-distances-vs-length.pdf}
+        \includegraphics[width=\textwidth]{../injectivity/figures/gemma-3-1b-pt-distances-vs-length.pdf}
         \caption{Gemma-3: similar pattern across sequence lengths.}
       \end{figure}
     \end{column}
@@ -395,7 +395,7 @@
     \begin{column}{0.43\textwidth}
       \begin{figure}
         \centering
-        \includegraphics[width=\textwidth]{../arXiv-2510.15511v3/figures/sipit_layer_ablation.pdf}
+        \includegraphics[width=\textwidth]{../injectivity/figures/sipit_layer_ablation.pdf}
         \caption{Inversion time vs layer depth: graceful scaling.}
       \end{figure}
     \end{column}
