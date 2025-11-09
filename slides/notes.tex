@@ -198,8 +198,8 @@
       \vspace{0.5em}
       \textbf{Why it matters:}
       \begin{itemize}
-        \item Real-analytic functions have measure-zero collision sets.
-        \item Either identically zero or zero set has measure zero.
+        \item Real-analytic functions are either identically zero or their zero set has measure zero.
+        \item Non-constant real-analytic functions have measure-zero collision sets.
         \item Standard initializations avoid measure-zero sets with probability 1.
       \end{itemize}
     \end{column}
@@ -216,7 +216,7 @@
 \begin{frame}{Almost-Sure Injectivity at Initialization}
   \begin{theorem}[Injectivity at initialization]
     Let $\boldsymbol{\theta}$ be drawn from any distribution with density (e.g., Gaussian).
-    Then for distinct prompts $\mathrm{s}, \mathrm{s}' \in \mathcal{V}^{\leq K}$:
+    Denote probability over this draw by $\Pr[\cdot]$. Then for distinct prompts $\mathrm{s}, \mathrm{s}' \in \mathcal{V}^{\leq K}$:
     \[
       \Pr[\mathbf{r}(\mathrm{s}; \boldsymbol{\theta}) = \mathbf{r}(\mathrm{s}'; \boldsymbol{\theta})] = 0
     \]
@@ -233,6 +233,8 @@
 \end{frame}
 
 \begin{frame}{Injectivity Preserved Under Training}
+  The following theorem shows that gradient descent with standard step sizes keeps almost all parameters outside the measure-zero collision set.
+
   \begin{theorem}[Training preserves injectivity]
     After $T$ steps of gradient descent with step sizes in $(0,1)$, with probability one:
     \[
@@ -243,14 +245,13 @@
   \vspace{1em}
   \textbf{Key ideas:}
   \begin{itemize}
-    \item GD update $\phi(\boldsymbol{\theta}) = \boldsymbol{\theta} - \eta \nabla \mathcal{L}(\boldsymbol{\theta})$ is real-analytic
-    \item A set $\mathcal{C}$ with measure zero,
-          its pre-image $\mathcal{C}_1 = \phi^{-1}(\mathcal{C})$ must also have measure zero. 
+    \item GD update $\phi(\boldsymbol{\theta}) = \boldsymbol{\theta} - \eta \nabla \mathcal{L}(\boldsymbol{\theta})$ is real-analytic because the representation map $\mathbf{r}$ and the loss $\mathcal{L}$ are real-analytic in $\boldsymbol{\theta}$.
+    \item A set $\mathcal{C}$ with measure zero, its pre-image $\mathcal{C}_1 = \phi^{-1}(\mathcal{C})$ must also have measure zero. 
     \begin{itemize}
       \item Jacobian determinant $\det D\phi$ not identically zero
       \item Inverse Function Theorem: preserves absolute continuity
     \end{itemize}
-    \item Finite composition of GD steps preserves measure properties
+    \item Finite composition of GD steps preserves measure properties.
   \end{itemize}
 \end{frame}
 
@@ -260,7 +261,12 @@
 \section{Invertibility: The \textsc{SipIt} Algorithm}
 
 \begin{frame}{From Injectivity to Invertibility}
-  \textbf{Injectivity $\Rightarrow$ Hidden states uniquely identify inputs}
+  
+  Invertibility usually requires bijectivity, but we only need to invert the map on the hidden states that \emph{actually occur}:
+
+  \begin{center}
+    \textbf{Injectivity $\Rightarrow$ Hidden states uniquely identify inputs}
+  \end{center}
 
   \vspace{1em}
   But can we \emph{actually recover} the input from hidden states?
